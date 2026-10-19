@@ -59,6 +59,7 @@ section h2{font-size:16px;margin:0 0 6px}
   <section class="note">
     <b>Say it all at once:</b> "School A, aluminum cans, 5 pounds" &rarr; hear the readback &rarr; "yes". Any order works; if something is missing, it asks only for that.<br>
     <b>Or step by step:</b> "start" &rarr; "yes colors separated" &rarr; "School A" &rarr; "25 pounds number 2" &rarr; "yes".<br>
+    <b>Foot pedal:</b> hold the pedal down, talk, then let go (same as Talk). The pedal never answers for you: say or tap Yes to save.<br>
     <b>Mic note:</b> the Talk button uses the browser's speech service (in Chrome this may send audio to Google). The keyboard mic uses your phone's own dictation. Both are optional; typing works too.
     <div id="caps"></div>
   </section>
@@ -71,12 +72,18 @@ section h2{font-size:16px;margin:0 0 6px}
 (function (root) {
   'use strict';
   var CONFIG = {
-    version: 'sorter-talk-config-2026-10-17b',
+    version: 'sorter-talk-config-2026-10-18c',
     weight: { minLb: 0.1, maxLb: null, decimals: 1, extraConfirmAboveLb: 250, kgToLb: 2.20462, ozToLb: 0.0625, defaultUnit: 'lb' },
     minSpeechConfidence: 0.5,
     schoolFillerWords: ['school', 'middle', 'elementary', 'high', 'senior', 'junior', 'academy', 'the'],
     duplicateWindowMs: 4000,
     listen: { hardTimeoutMs: 8000, abortGraceMs: 1500 },
+    // Foot pedal = push-to-talk: hold the pedal, talk, let go. Never answers Yes/No.
+    // holdKeys: non-typing keys (always used; their browser default is blocked so they never type).
+    // releaseKeys: for a pedal set to send F9 on press and F10 on release (F10 = let go).
+    // letterKeys: common pedal factory letters; used ONLY when no text box is focused, otherwise they type normally.
+    pedal: { holdKeys: ['F9'], releaseKeys: ['F10'], letterKeys: ['b', 'a', 'c'], minHoldMs: 300, debounceMs: 200, maxRestarts: 1,
+      continuous: true, interimResults: true },
     practice: { workerId: 'practice', stationId: 'PRACTICE', weightCategory: 'crv_scrap' },
     weightLogColumns: ['Timestamp', 'Worker ID', 'Source Code', 'Color', 'Material', 'Lbs',
       'Bag ID', 'Station ID', 'Session ID', 'Segregated',
@@ -133,7 +140,7 @@ section h2{font-size:16px;margin:0 0 6px}
 </script>
 <script>
 /**
- * Sorter Talk core: pure parser + Session (flow and confirm gate) + ListenController.
+ * Sorter Talk core: pure parser + Session (flow and confirm gate) + ListenController + PedalController.
  * No network, no server calls, no AI. Everything list-like (bins, words, schools) comes from the config object.
  * ES5. node: module.exports; browser: window.SorterTalk.
  */
@@ -682,6 +689,7 @@ section h2{font-size:16px;margin:0 0 6px}
     this.rec = null; this.listening = false; this.hard = null; this.grace = null; this.disabled = !SR;
   }
   ListenController.prototype.tap = function (purpose) {
+    if (this.hold) return this.releaseHold();
     if (this.listening) { this.stop('second_tap'); return 'stopping'; }
     return this.start(purpose);
   };
@@ -732,8 +740,154 @@ section h2{font-size:16px;margin:0 0 6px}
     if (this.h.onFallback) this.h.onFallback(why);
   };
 
+  // ---- push-to-talk (foot pedal) hold mode: listen while held, one transcript on release ----
+  // Speech is collected across the hold and delivered ONCE on release (as if spoken). It is never an answer by itself.
+  ListenController.prototype.startHold = function (purpose, keep) {
+    var self = this;
+    if (this.disabled) { this._fallback('no_speech_api'); return 'fallback'; }
+    if (this.listening) return 'busy';
+    if (!keep || !this.hold) this.hold = { parts: [], conf: undefined, releasing: false, timedOut: false, purpose: purpose || 'utterance' };
+    var r, P = this.cfg.pedal || {};
+    try { r = new this.SR(); } catch (e) { this.hold = null; this._fallback('construct_failed'); return 'fallback'; }
+    this.rec = r; this.listening = true; this.purpose = this.hold.purpose;
+    r.lang = 'en-US'; r.interimResults = P.interimResults !== false; r.continuous = P.continuous !== false; r.maxAlternatives = 1;
+    var seg = { text: '', conf: undefined }; this._seg = seg;
+    r.onresult = function (ev) {
+      if (self.rec !== r) return;
+      var all = (ev && ev.results) || [], txt = [], cf;
+      for (var i = 0; i < all.length; i++) {
+        var a = all[i] && all[i][0]; if (!a) continue;
+        txt.push(String(a.transcript || '').trim());
+        if (all[i].isFinal !== false && typeof a.confidence === 'number' && a.confidence > 0) cf = cf === undefined ? a.confidence : Math.min(cf, a.confidence);
+      }
+      seg.text = txt.join(' ').trim(); seg.conf = cf;
+    };
+    r.onerror = function (ev) {
+      if (self.rec !== r) return;
+      var code = ev && ev.error;
+      // a key press may not count as a mic gesture on some phones: report it, drop the hold, keep the Talk button (tap decides fallback)
+      if (FALLBACK_ERRORS.indexOf(String(code)) >= 0) { self.cancel('error'); if (self.h.onError) self.h.onError(code); }
+      else self._segEnd(r, seg, 'error');
+    };
+    r.onend = function () { self._segEnd(r, seg, 'end'); };
+    this.hard = this.t.set(function () { if (self.hold) self.hold.timedOut = true; self._stopRec(r, 'timeout'); }, this.cfg.listen.hardTimeoutMs);
+    try { r.start(); } catch (e2) { this.cancel('start_failed'); if (this.h.onError) this.h.onError('start_failed'); return 'start_failed'; }
+    if (this.rec === r && this.h.onState) this.h.onState('listening', 'hold');
+    return 'listening';
+  };
+  ListenController.prototype._stopRec = function (r, why) {
+    var self = this, seg = this._seg;
+    if (this.rec !== r) return;
+    try { r.stop(); } catch (e) {}
+    if (this.hard != null) { this.t.clear(this.hard); this.hard = null; }
+    if (this.grace == null) this.grace = this.t.set(function () { try { r.abort(); } catch (e) {} self._segEnd(r, seg, why === 'timeout' ? 'timeout' : 'forced'); }, this.cfg.listen.abortGraceMs);
+    if (this.h.onState) this.h.onState('stopping', why);
+  };
+  /** One recognizer finished (onend / error / grace abort). Runs at most once per recognizer. */
+  ListenController.prototype._segEnd = function (r, seg, why) {
+    if (this.rec !== r) return;
+    var H = this.hold;
+    if (H && seg.text) { H.parts.push(seg.text); if (seg.conf !== undefined) H.conf = H.conf === undefined ? seg.conf : Math.min(H.conf, seg.conf); }
+    this.reset(why);
+    if (!H) return;
+    if (H.releasing) return this._deliverHold();
+    if (this.onHoldEnded) this.onHoldEnded(H.timedOut ? 'timeout' : why);
+  };
+  /** Pedal let go: stop listening, then deliver the whole hold once. */
+  ListenController.prototype.releaseHold = function () {
+    var H = this.hold;
+    if (!H) return 'none';
+    H.releasing = true;
+    if (this.listening && this.rec) { this._stopRec(this.rec, 'release'); return 'stopping'; }
+    this._deliverHold(); return 'delivered';
+  };
+  ListenController.prototype._deliverHold = function () {
+    var H = this.hold; this.hold = null;
+    if (!H) return;
+    var text = H.parts.join(' ').replace(/\s+/g, ' ').trim();
+    if (text) { if (this.h.onText) this.h.onText(text, H.conf, H.purpose); }
+    else if (this.h.onNothing) this.h.onNothing('nothing_heard');
+  };
+  /** Drop everything (blur, too-short tap, mic error): no text is delivered. */
+  ListenController.prototype.cancel = function (why) {
+    var r = this.rec; this.hold = null;
+    if (r) { r.onresult = null; r.onerror = null; r.onend = null; try { r.abort(); } catch (e) {} }
+    if (r || this.listening) this.reset(why);
+    return 'cancelled';
+  };
+
+  // ---- PedalController: pure key logic for a USB foot pedal (acts as a keyboard). Clock injected. ----
+  // Push-to-talk: keydown of a pedal key starts listening; keyup of the same key (or a configured release key) stops
+  // and hands the transcript to the normal speech path. The pedal itself never answers Yes/No and never saves.
+  var RESERVED_KEYS = ['Enter', ' ', 'Spacebar', 'Tab', 'Escape', 'Backspace'];
+  function PedalController(listener, cfg, opts) {
+    opts = opts || {};
+    this.L = listener; this.cfg = cfg; this.P = cfg.pedal || {};
+    this.now = opts.now || function () { return Date.now(); };
+    this.held = null; this.downAt = 0; this.lastEdge = -1e15; this.restarts = 0; this.adopted = false;
+    var self = this;
+    if (listener) listener.onHoldEnded = function (why) { self.onListenEnded(why); };
+  }
+  function inList(list, k) { list = list || []; for (var i = 0; i < list.length; i++) if (String(list[i]).toLowerCase() === k) return true; return false; }
+  /** Classify a key event: 'hold' | 'release' | 'letter' | null. */
+  PedalController.prototype.kind = function (ev) {
+    if (!ev || ev.ctrlKey || ev.metaKey || ev.altKey) return null;
+    var k = String(ev.key || '');
+    if (!k || RESERVED_KEYS.indexOf(k) >= 0) return null;
+    var lk = k.toLowerCase();
+    if (inList(this.P.holdKeys, lk)) return 'hold';
+    if (inList(this.P.releaseKeys, lk)) return 'release';
+    if (k.length === 1 && inList(this.P.letterKeys, lk)) return 'letter';
+    return null;
+  };
+  /** ev: { key, repeat, typing (a text box has focus), ctrlKey/metaKey/altKey }. Returns { action, preventDefault }. */
+  PedalController.prototype.keydown = function (ev) {
+    var kd = this.kind(ev), now = this.now();
+    if (!kd) return { action: 'none', preventDefault: false };
+    if (ev.typing) return { action: 'typing', preventDefault: kd !== 'letter' };   // letters type normally in the box
+    if (kd === 'release') return this.held ? this.keyup({ key: this.held, typing: false }, true) : { action: 'none', preventDefault: true };
+    if (ev.repeat) return { action: 'repeat', preventDefault: true };
+    if (this.held) return { action: 'already_held', preventDefault: true };
+    if (now - this.lastEdge < this.P.debounceMs) return { action: 'debounced', preventDefault: true };
+    this.held = String(ev.key).toLowerCase(); this.downAt = now; this.lastEdge = now; this.restarts = 0;
+    if (this.L.listening && !this.L.hold) { this.adopted = true; return { action: 'adopt', preventDefault: true }; }
+    this.adopted = false;
+    var r = this.L.startHold('pedal');
+    if (r !== 'listening') { this.held = null; return { action: r, preventDefault: true }; }
+    return { action: 'start', preventDefault: true };
+  };
+  PedalController.prototype.keyup = function (ev, viaReleaseKey) {
+    var kd = this.kind(ev), now = this.now();
+    if (!kd || !this.held) return { action: 'none', preventDefault: !!kd && kd !== 'letter' };
+    if (!viaReleaseKey && String(ev.key).toLowerCase() !== this.held) return { action: 'none', preventDefault: kd !== 'letter' };
+    var dur = now - this.downAt, adopted = this.adopted;
+    this.held = null; this.lastEdge = now; this.adopted = false;
+    if (dur < this.P.minHoldMs) {                         // too-short tap: ignored (no text, no answer, no write)
+      if (!adopted) this.L.cancel('too_short');
+      return { action: 'too_short', preventDefault: true };
+    }
+    if (adopted) { if (this.L.listening) this.L.stop('pedal_release'); return { action: 'release', preventDefault: true }; }
+    this.L.releaseHold();
+    return { action: 'release', preventDefault: true };
+  };
+  /** Window blur / page hidden / focus lost while held: stop, forget the hold, deliver nothing. */
+  PedalController.prototype.blur = function () {
+    if (!this.held) return 'none';
+    this.held = null; this.adopted = false; this.lastEdge = this.now();
+    this.L.cancel('blur');
+    return 'cancelled';
+  };
+  /** Recognition ended on its own while the pedal is still down: at most maxRestarts restarts, never after the hard timeout. */
+  PedalController.prototype.onListenEnded = function (why) {
+    if (!this.held || this.adopted) return 'ignored';
+    if (why === 'timeout' || this.restarts >= (this.P.maxRestarts || 0) || this.now() - this.downAt >= this.cfg.listen.hardTimeoutMs) return 'wait_release';
+    this.restarts++;
+    var r = this.L.startHold('pedal', true);
+    return r === 'listening' ? 'restart' : r;
+  };
+
   var API = { normalize: normalize, tokens: tokens, parse: parse, parseYesNo: parseYesNo, reask: reask, weighReadback: weighReadback,
-    buildLexicon: buildLexicon, Store: Store, memoryBackend: memoryBackend, Session: Session, ListenController: ListenController,
+    buildLexicon: buildLexicon, Store: Store, memoryBackend: memoryBackend, Session: Session, ListenController: ListenController, PedalController: PedalController,
     sourcesAZ: sourcesAZ, LOG_KEY: LOG_KEY, STATE_KEY: STATE_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.SorterTalk = API;
@@ -767,17 +921,32 @@ section h2{font-size:16px;margin:0 0 6px}
 
   var listener = new S.ListenController(SR, C, {
     onText: function (t, conf) { $('heard').textContent = 'Heard: "' + t + '"'; render(session.hear(t, conf)); },
-    onState: function (state) {
+    onState: function (state, why) {
       var b = $('talk');
-      if (state === 'listening') { b.classList.add('listening'); b.textContent = 'Listening\u2026 tap to stop'; }
+      if (state === 'listening') { b.classList.add('listening'); b.textContent = why === 'hold' ? 'Listening\u2026 let go of the pedal to stop' : 'Listening\u2026 tap to stop'; }
       else if (state === 'stopping') { b.textContent = 'Stopping\u2026'; }
       else { b.classList.remove('listening'); b.innerHTML = '&#127908; Talk'; }
     },
+    onNothing: function () { $('heard').textContent = 'Nothing heard. Hold the pedal (or tap Talk) and speak.'; },
     onError: function (code) { $('heard').textContent = 'Speech: ' + code + '. Tap Talk again or type.'; },
     onFallback: function (why) { $('talk').style.display = 'none'; $('heard').textContent = 'Mic not available here (' + why + '). Use the keyboard mic in the box.'; }
   });
   if (!SR) $('talk').style.display = 'none';
   $('talk').onclick = function () { if (synth) try { synth.cancel(); } catch (e) {} listener.tap(); };
+
+  // foot pedal (USB, acts as a keyboard): push-to-talk. It only starts/stops listening; it never answers Yes/No.
+  var pedal = new S.PedalController(listener, C);
+  function typing() { var a = document.activeElement; return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable === true); }
+  function pedalEv(e) { return { key: e.key, repeat: e.repeat, typing: typing(), ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey }; }
+  function pedalNote(a) { if (a === 'too_short') $('heard').textContent = 'Pedal: hold it down while you talk, then let go.'; }
+  document.addEventListener('keydown', function (e) {
+    var r = pedal.keydown(pedalEv(e)); if (r.preventDefault) e.preventDefault();
+    if (r.action === 'start' && synth) try { synth.cancel(); } catch (x) {}
+    pedalNote(r.action);
+  });
+  document.addEventListener('keyup', function (e) { var r = pedal.keyup(pedalEv(e)); if (r.preventDefault) e.preventDefault(); pedalNote(r.action); });
+  window.addEventListener('blur', function () { pedal.blur(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) pedal.blur(); });
 
   function sendText() { var t = $('text').value.trim(); if (!t) return; $('heard').textContent = 'Typed: "' + t + '"'; $('text').value = ''; render(session.hear(t)); }
   $('send').onclick = sendText;
