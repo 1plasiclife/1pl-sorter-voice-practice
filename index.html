@@ -57,7 +57,8 @@ section h2{font-size:16px;margin:0 0 6px}
     <ul id="log"></ul>
   </section>
   <section class="note">
-    <b>Try:</b> "start" &rarr; "yes colors separated" &rarr; "School A" &rarr; "25 pounds number 2" &rarr; "yes".<br>
+    <b>Say it all at once:</b> "School A, aluminum cans, 5 pounds" &rarr; hear the readback &rarr; "yes". Any order works; if something is missing, it asks only for that.<br>
+    <b>Or step by step:</b> "start" &rarr; "yes colors separated" &rarr; "School A" &rarr; "25 pounds number 2" &rarr; "yes".<br>
     <b>Mic note:</b> the Talk button uses the browser's speech service (in Chrome this may send audio to Google). The keyboard mic uses your phone's own dictation. Both are optional; typing works too.
     <div id="caps"></div>
   </section>
@@ -73,6 +74,7 @@ section h2{font-size:16px;margin:0 0 6px}
     version: 'sorter-talk-config-2026-10-17b',
     weight: { minLb: 0.1, maxLb: null, decimals: 1, extraConfirmAboveLb: 250, kgToLb: 2.20462, ozToLb: 0.0625, defaultUnit: 'lb' },
     minSpeechConfidence: 0.5,
+    schoolFillerWords: ['school', 'middle', 'elementary', 'high', 'senior', 'junior', 'academy', 'the'],
     duplicateWindowMs: 4000,
     listen: { hardTimeoutMs: 8000, abortGraceMs: 1500 },
     practice: { workerId: 'practice', stationId: 'PRACTICE', weightCategory: 'crv_scrap' },
@@ -93,7 +95,7 @@ section h2{font-size:16px;margin:0 0 6px}
     },
     materials: [
       { code: 'PLASTIC', label: 'PLASTIC', sub: 'Bottles & containers', say: 'plastic', crv: true,
-        aliases: ['plastic', 'plastics', 'pet', 'number 1', 'number one', 'water bottle', 'water bottles', 'soda bottle', 'soda bottles',
+        aliases: ['plastic', 'plastics', 'pet', 'pet bottle', 'pet bottles', 'number 1', 'number one', 'water bottle', 'water bottles', 'soda bottle', 'soda bottles',
           'plastic bottle', 'plastic bottles', 'crv plastic', 'clear plastic'] },
       { code: 'HDPE', label: 'HDPE', sub: 'Hard plastic #2', say: 'HDPE, number 2', crv: true,
         aliases: ['hdpe', 'hdp', 'number 2', 'number two', 'two plastic', 'type two', 'type 2', 'milk jug', 'milk jugs', 'jug', 'jugs',
@@ -101,7 +103,7 @@ section h2{font-size:16px;margin:0 0 6px}
       { code: 'PP', label: 'PP', sub: 'Plastic #5 (practice only)', say: 'PP, number 5', crv: null, practiceOnly: true,
         aliases: ['pp', 'p p', 'number 5', 'number five', 'five plastic', 'polypropylene', 'yogurt cup', 'yogurt cups', 'cap', 'caps'] },
       { code: 'ALUMINUM', label: 'ALUMINUM', sub: 'Cans', say: 'aluminum', crv: true,
-        aliases: ['aluminum', 'aluminium', 'can', 'cans', 'soda can', 'soda cans', 'tin'] },
+        aliases: ['aluminum', 'aluminium', 'aluminum can', 'aluminum cans', 'can', 'cans', 'soda can', 'soda cans', 'tin'] },
       { code: 'GLASS', label: 'GLASS', sub: 'Bottles & jars', say: 'glass', crv: true,
         aliases: ['glass', 'glass bottle', 'glass bottles', 'jar', 'jars'] },
       { code: 'COMPOST', label: 'COMPOST', sub: 'Organics', say: 'compost', crv: false,
@@ -245,12 +247,56 @@ section h2{font-size:16px;margin:0 0 6px}
       (m.aliases || []).forEach(function (x) { add('material', m, x); });
       (m.notAcceptedAliases || []).forEach(function (x) { add('material', m, x, true); });
     });
+    var fill = {}; (cfg.schoolFillerWords || []).forEach(function (w) { fill[w] = 1; });
+    var byPhrase = {};
+    function addSchool(s, phrase) {
+      schoolVariants(tokens(phrase), fill).forEach(function (t) {
+        var k = t.join(' ');
+        if (!byPhrase[k]) { byPhrase[k] = { toks: t, kind: 'source', refs: [], phrase: k }; lex.push(byPhrase[k]); }
+        if (byPhrase[k].refs.indexOf(s) < 0) byPhrase[k].refs.push(s);
+      });
+    }
     (cfg.sources || []).forEach(function (s) {
-      add('source', s, s.name); add('source', s, s.code);
-      (s.aliases || []).forEach(function (x) { add('source', s, x); });
+      addSchool(s, s.name); addSchool(s, s.code);
+      (s.aliases || []).forEach(function (x) { addSchool(s, x); });
     });
     lex.sort(function (x, y) { return y.toks.length - x.toks.length; });
     return lex;
+  }
+  /** All versions of a school phrase with any subset of filler words left out. The full phrase is always kept;
+   *  a shortened one only if it still has a non-filler word of 3+ letters (so "School A" never shrinks to "a"). */
+  function schoolVariants(t, fill) {
+    var pos = [], out = [t], seen = {}, i, m;
+    seen[t.join(' ')] = 1;
+    for (i = 0; i < t.length; i++) if (has(fill, t[i])) pos.push(i);
+    if (pos.length > 6) return out;
+    for (m = 1; m < (1 << pos.length); m++) {
+      var drop = {}, v = [], strong = false;
+      for (i = 0; i < pos.length; i++) if (m & (1 << i)) drop[pos[i]] = 1;
+      for (i = 0; i < t.length; i++) if (!drop[i]) { v.push(t[i]); if (!has(fill, t[i]) && t[i].length >= 3) strong = true; }
+      if (!v.length || !strong || seen[v.join(' ')]) continue;
+      seen[v.join(' ')] = 1; out.push(v);
+    }
+    return out;
+  }
+  /** Longest-first school match. -> { refs: [school...] (1 = sure, >1 = ambiguous), at, end } or null */
+  function findSchool(toks, used, lex) {
+    var best = null;
+    for (var p = 0; p < lex.length; p++) {
+      var L = lex[p];
+      if (L.kind !== 'source') continue;
+      if (best && L.toks.length < best.len) break;
+      for (var i = 0; i + L.toks.length <= toks.length; i++) {
+        var ok = true;
+        for (var k = 0; k < L.toks.length; k++) if (used[i + k] || toks[i + k] !== L.toks[k]) { ok = false; break; }
+        if (!ok) continue;
+        if (!best) best = { refs: L.refs.slice(), at: i, end: i + L.toks.length, len: L.toks.length };
+        else if (best.at === i) L.refs.forEach(function (r) { if (best.refs.indexOf(r) < 0) best.refs.push(r); });
+        else if (best.refs.length === 1 && L.refs.length === 1 && L.refs[0] !== best.refs[0]) best.refs.push(L.refs[0]);
+      }
+    }
+    if (best) for (var j = best.at; j < best.end; j++) used[j] = true;
+    return best;
   }
   function findPhrases(toks, used, lex, kind) {
     var hits = [];
@@ -300,35 +346,43 @@ section h2{font-size:16px;margin:0 0 6px}
       if (res.intent !== 'FINISH_SCHOOL') return res;
     }
     var toks = tokens(text), used = toks.map(function () { return false; }), i;
-    // school: name / alias
-    {
-      var sH = uniqRefs(findPhrases(toks, used, lex, 'source'));
-      if (sH.length > 1) res.ambiguous = { kind: 'source', candidates: sH };
-      else if (sH.length === 1) res.source = sH[0];
+    // school: longest multi-word match over config names/aliases (filler words optional)
+    var sch = findSchool(toks, used, lex), schoolEnd = -1;
+    if (sch) {
+      schoolEnd = sch.end;
+      if (sch.refs.length > 1) res.ambiguous = { kind: 'source', candidates: sch.refs };
+      else res.source = sch.refs[0];
     }
+    var fillW = {}; (cfg.schoolFillerWords || []).forEach(function (w) { fillW[w] = 1; });
     if (res.intent === 'FINISH_SCHOOL') return res;
     if (/^(bag|bag id)? ?bag \d{7}$/.test(norm) || /\bbag \d{7}\b/.test(norm)) { res.errors.push('bag_id_not_available'); return res; }
     // material
     var mHits = findPhrases(toks, used, lex, 'material'), mRefs = uniqRefs(mHits);
     if (mRefs.length > 1) res.ambiguous = res.ambiguous || { kind: 'material', candidates: mRefs };
     else if (mRefs.length === 1) { res.material = mRefs[0]; res.notAccepted = mHits.some(function (h) { return h.notAccepted; }); }
+    var resinHit = null;
+    mHits.forEach(function (h) { var f = h.phrase.split(' ')[0]; if (/^\d+$/.test(f) && h.phrase.split(' ').length > 1) resinHit = h; });
     for (i = 0; i + 1 < toks.length; i++) if (!used[i] && toks[i] === 'number' && /^\d+$/.test(toks[i + 1])) { res.heardUnknown = 'number ' + toks[i + 1]; used[i] = used[i + 1] = true; }
     // weight
     var wi = -1, unit = null;
     for (i = 0; i + 1 < toks.length; i++) if (!used[i] && isNum(toks[i]) && has(UNITS, toks[i + 1])) { wi = i; unit = UNITS[toks[i + 1]]; used[i] = used[i + 1] = true; break; }
-    var bare = [];
+    var bare = [], dropWeight = false;
     for (i = 0; i < toks.length; i++) if (!used[i] && isNum(toks[i])) bare.push(i);
     if (wi < 0 && bare.length === 1) {
       wi = bare[0]; unit = W.defaultUnit || 'lb'; res.unitAssumed = true; used[wi] = true;
       var v0 = parseFloat(toks[wi]);
       // "three plastic": 3 lb of plastic or "#3"? ask (resin words that ARE bins are aliases, e.g. "two plastic").
-      if (toks[wi + 1] === 'plastic' && Math.floor(v0) === v0 && v0 >= 1 && v0 <= 7) { res.errors.push('resin_or_weight'); res.ambiguous = res.ambiguous || { kind: 'resin_or_weight', number: v0 }; }
+      if (toks[wi + 1] === 'plastic' && Math.floor(v0) === v0 && v0 >= 1 && v0 <= 7) { res.errors.push('resin_or_weight'); res.ambiguous = res.ambiguous || { kind: 'resin_or_weight', number: v0 }; dropWeight = true; }
+      // "School B 5 aluminum": a unit-less number right after a school name is not taken as the weight. Ask.
+      else if (wi === schoolEnd) { res.errors.push('weight_after_school'); res.ambiguous = res.ambiguous || { kind: 'weight_after_school', number: v0 }; dropWeight = true; }
     } else if (wi < 0 && bare.length > 1) res.errors.push('weight_ambiguous');
     else if (wi >= 0 && bare.length) {
       var lv = parseFloat(toks[bare[0]]);
       if (Math.floor(lv) === lv && lv >= 1 && lv <= 7) { res.errors.push('resin_or_weight'); res.ambiguous = res.ambiguous || { kind: 'resin_or_weight', number: lv }; }
       else res.errors.push('weight_ambiguous');
     }
+    // "School B five plastic": #5 PP, or 5 pounds of plastic? With no weight in pounds, a resin-number phrase is ambiguous. Ask.
+    if (resinHit && wi < 0) { res.errors.push('resin_or_weight'); res.ambiguous = res.ambiguous || { kind: 'resin_or_weight', number: parseInt(resinHit.phrase, 10), phrase: true }; res.material = null; res.notAccepted = false; }
     if (wi >= 0) {
       var v = parseFloat(toks[wi]);
       var raw = unit === 'kg' ? v * W.kgToLb : (unit === 'oz' ? v * W.ozToLb : v);
@@ -337,10 +391,11 @@ section h2{font-size:16px;margin:0 0 6px}
       res.rounded = !res.converted && lb !== v;
       if (!(lb > 0) || lb < W.minLb) res.errors.push('weight_not_positive');
       else if (W.maxLb != null && lb > W.maxLb) res.errors.push('weight_out_of_range');
-      else res.weightLb = lb;
+      else if (!dropWeight) res.weightLb = lb;
     }
     var unknown = [];
-    for (i = 0; i < toks.length; i++) if (!used[i] && !has(UNITS, toks[i]) && !has(FILLER, toks[i])) unknown.push(toks[i]);
+    for (i = 0; i < toks.length; i++) if (!used[i] && !has(UNITS, toks[i]) && !has(FILLER, toks[i]) && !has(fillW, toks[i])) unknown.push(toks[i]);
+    res.unknown = unknown;
     if (!res.material && !res.heardUnknown && unknown.length) res.heardUnknown = unknown.join(' ');
     if (!res.intent) {
       if (/\b(empty|emptied)\b/.test(norm)) res.intent = 'EMPTY_BIN';
@@ -359,7 +414,7 @@ section h2{font-size:16px;margin:0 0 6px}
   }
   /** Readback for a fully-filled weigh record d = {weightLb,value,unit,converted,rounded,material,notAccepted,source}. */
   function weighReadback(d, cfg) {
-    var pre = d.notAccepted ? 'Not accepted. Log as WASTE? ' : '';
+    var pre = (d.notAccepted ? 'Not accepted. Log as WASTE? ' : '') + (d.askBags ? 'Bags are separated by color, and ' : '');
     var big = d.weightLb > cfg.weight.extraConfirmAboveLb ? ' That\u2019s over ' + cfg.weight.extraConfirmAboveLb + ' pounds. Is that right?' : '';
     return pre + weightWords(d) + ' of ' + d.material.say + ' for ' + d.source.name + '.' + big + ' Say yes or tap Yes.';
   }
@@ -370,6 +425,8 @@ section h2{font-size:16px;margin:0 0 6px}
     if (r.errors.indexOf('bag_id_not_available') >= 0) return 'Bag ID lookup is not available in practice. Say or tap the school.';
     if (r.ambiguous) {
       var A = r.ambiguous;
+      if (A.kind === 'weight_after_school') return 'Is ' + A.number + ' the weight? Say it with pounds, like "' + A.number + ' pounds".';
+      if (A.kind === 'resin_or_weight' && A.phrase) return 'Did you mean number ' + A.number + ', or ' + A.number + ' pounds of plastic? Say the weight with pounds, like "10 pounds number ' + A.number + '".';
       if (A.kind === 'resin_or_weight') return 'Did you mean number ' + A.number + ', or ' + A.number + ' pounds? Say it again, like "25 pounds, number 2".';
       return 'Which one: ' + A.candidates.map(function (c) { return c.name || c.label; }).join(', ') + '?';
     }
@@ -427,15 +484,17 @@ section h2{font-size:16px;margin:0 0 6px}
   Session.prototype.tapSchool = function (code) {
     var s = sourceByCode(this.cfg, code);
     if (!s) return this._out('Unknown school.');
-    if (this.st.step === 'who' || this.st.step === 'bags') return this._out(this.prompt());
     if (this.st.sourceCode && this.st.sourceCode !== code) return this._out(this.source().name + ' is open. Say finished with this school first.');
-    this.st.sourceCode = code; this._go(this.st.material ? 'weight' : 'material');
+    this.st.sourceCode = code; this.draft.source = null; this.draft.schoolChoices = null;
+    if (this.draft.material || this.draft.weightLb != null) return this._advance(null);
+    this._go(this.st.material ? 'weight' : 'material');
     return this._out('School: ' + s.name + '. ' + this.prompt());
   };
   Session.prototype.tapMaterial = function (code) {
     var m = materialByCode(this.cfg, code);
     if (!m) return this._out('Unknown bin.');
-    if (!this.st.sourceCode) return this._out(this.prompt());
+    if (!this.st.sourceCode && !this.draft.source) { this.draft.material = m; this.draft.notAccepted = false; return this._advance(null); }
+    if (this.draft.weightLb != null) { this.draft.material = m; this.draft.notAccepted = false; return this._advance(null); }
     this.st.material = code; this._go('weight');
     return this._out('Material: ' + m.say + '. ' + this.prompt());
   };
@@ -453,10 +512,13 @@ section h2{font-size:16px;margin:0 0 6px}
     }
     if (!this.pending && this.st.step === 'bags') {
       var yb = parseYesNo(text);
-      if (yb === 'yes') return this.tapBagsYes();
       if (yb === 'no') return this._out('Please separate the bags by color first, then say yes.');
     }
     var r = parse(text, cfg);
+    if (!this.pending && this.draft.schoolChoices && !r.source) {
+      var pk = pickChoice(text, this.draft.schoolChoices, cfg);
+      if (pk) r = { text: r.text, intent: 'SLOTS', source: pk, material: null, weightLb: null, errors: [], ambiguous: null, heardUnknown: null };
+    }
     if (this.pending) { this.st.step = this.pending.backStep; this.pending = null; }   // a new utterance replaces the pending one (nothing written)
     var step = this.st.step;
     if (r.errors.indexOf('empty') >= 0 || r.errors.indexOf('not_understood') >= 0) {
@@ -483,42 +545,87 @@ section h2{font-size:16px;margin:0 0 6px}
         if (!this.st.material) return this._out(this.prompt());
         this._go('weight'); return this._out('Weigh another ' + this.material().label + ' bin. ' + this.prompt());
     }
-    if (step === 'who' || step === 'bags') return this._out(this.prompt(), { reask: true });
-    if (r.errors.length || r.ambiguous) return this._out(reask(r, cfg), { reask: true });
     if (r.intent === 'EMPTY_BIN') {
+      if (r.errors.length || r.ambiguous) return this._out(reask(r, cfg), { reask: true });
       if (!r.material) return this._out('Which bin is empty? Say one of: ' + binWords(cfg) + '.', { reask: true });
       return this._stage({ kind: 'EMPTY', material: r.material }, 'Mark ' + r.material.label + ' bin empty. Say yes or tap Yes.');
     }
-    // SLOTS: merge with draft/state. One school at a time.
+    // SLOTS (one-shot, any order): keep every field that was heard clearly, then ask only for what is missing or unclear.
     if (r.source && this.st.sourceCode && r.source.code !== this.st.sourceCode) return this._out(this.source().name + ' is open. Say finished with this school first.', { reask: true });
     var d = this.draft;
+    if (!r.source && d.schoolChoices) { var pick = pickChoice(text, d.schoolChoices, cfg); if (pick) { r.source = pick; if (r.ambiguous && r.ambiguous.kind === 'source') r.ambiguous = null; } }
+    if (r.source) { d.source = this.st.sourceCode ? null : r.source; d.schoolChoices = null; }
     if (r.material) { d.material = r.material; d.notAccepted = r.notAccepted; }
-    if (r.weightLb != null) { d.weightLb = r.weightLb; d.value = r.value; d.unit = r.unit; d.converted = r.converted; d.rounded = r.rounded; }
-    if (!d.material && r.heardUnknown) {
-      if (step === 'school' && d.weightLb == null) return this._out('I heard "' + r.heardUnknown + '". That is not a school on this list. ' + this.prompt(), { reask: true });
-      return this._out(reask(r, cfg), { reask: true });
+    if (r.weightLb != null) { d.weightLb = r.weightLb; d.value = r.value; d.unit = r.unit; d.converted = r.converted; d.rounded = r.rounded; d.unitAssumed = r.unitAssumed; }
+    if (r.ambiguous && r.ambiguous.kind === 'source') d.schoolChoices = r.ambiguous.candidates;
+    var heard = this._heard();
+    if (r.ambiguous || r.errors.length) return this._out((heard ? 'Heard: ' + heard + '. ' : '') + reask(r, cfg), { reask: true });
+    var unk = r.heardUnknown || (r.unknown && r.unknown.length ? r.unknown.join(' ') : null);
+    if (!r.source && !r.material && r.value == null && parseYesNo(text)) return this.answer(parseYesNo(text));
+    if (unk && (!r.material || !this._srcNow()) && this._missing().length) {
+      var sN = !!this._srcNow(), mN = !!this._matNow();
+      var what = (!sN && mN) ? 'a school on this list' : (sN && !mN) ? 'a bin here' : 'a bin or a school on this list';
+      this._go(this._missing()[0]);
+      return this._out('I heard "' + unk + '". That is not ' + what + '. ' + (heard ? 'Heard so far: ' + heard + '. ' : '') + this._askMissing(), { reask: true });
     }
-    var src = r.source || this.source();
-    var mat = d.material || this.material();
-    if (!src) {
-      if (r.source === null && !d.material && d.weightLb == null) return this._out(this.prompt(), { reask: true });
-      this._go('school'); return this._out(this.prompt(), { reask: true });
+    return this._advance(r);
+  };
+  Session.prototype._srcNow = function () { return this.draft.source || this.source(); };
+  Session.prototype._matNow = function () { return this.draft.material || this.material(); };
+  /** Short summary of what has been heard but not yet recorded (school, material, weight). */
+  Session.prototype._heard = function () {
+    var d = this.draft, parts = [];
+    if (d.source) parts.push(d.source.name);
+    if (d.material) parts.push(d.material.say);
+    if (d.weightLb != null) parts.push(weightWords(d));
+    return parts.join(', ');
+  };
+  Session.prototype._missing = function () {
+    var m = [];
+    if (!this._srcNow()) m.push('school'); if (!this._matNow()) m.push('material'); if (this.draft.weightLb == null) m.push('weight');
+    return m;
+  };
+  Session.prototype._askMissing = function () {
+    var m = this._missing(), q = { school: 'which school', material: 'what material', weight: 'how much it weighs' };
+    if (!m.length) return '';
+    var s = m.map(function (x) { return q[x]; });
+    var txt = s.length === 1 ? s[0] : s.slice(0, -1).join(', ') + ' and ' + s[s.length - 1];
+    return 'Say ' + txt + '.' + (m.indexOf('material') >= 0 ? ' Bins: ' + binWords(this.cfg) + '.' : '');
+  };
+  /** Decide what to do with the fields we have: guided single steps, ask for missing ones, or ONE readback of everything. */
+  Session.prototype._advance = function (r) {
+    var cfg = this.cfg, d = this.draft, src = this._srcNow(), mat = this._matNow();
+    // guided: a school alone (none open, nothing else heard) -> "School: X. Yes?"
+    if (r && r.source && d.source && !this.st.sourceCode && !d.material && d.weightLb == null) {
+      var s0 = d.source; d.source = null;
+      return this._stage({ kind: 'SCHOOL', source: s0 }, 'School: ' + s0.name + '. Say yes or tap Yes.');
     }
-    if (!mat) {
-      if (r.source && !this.st.sourceCode && d.weightLb == null) return this._stage({ kind: 'SCHOOL', source: r.source }, 'School: ' + r.source.name + '. Say yes or tap Yes.');
-      this._go('material'); return this._out((r.source ? 'School: ' + src.name + '. ' : '') + 'What material? Say one of: ' + binWords(cfg) + '.', { reask: true });
+    // guided: material alone with a school open -> set it (foam needs its own Yes)
+    if (this.st.sourceCode && d.material && d.weightLb == null && !d.source) {
+      var m0 = d.material, na = d.notAccepted; this.draft = {};
+      if (na) return this._stage({ kind: 'MATERIAL', material: m0 }, 'Not accepted. Log as WASTE? Say yes or tap Yes.');
+      this.st.material = m0.code; this._go('weight');
+      return this._out('Material: ' + m0.say + '. ' + this.prompt());
     }
-    if (d.weightLb == null) {
-      if (r.source && !this.st.sourceCode) return this._stage({ kind: 'SCHOOL', source: r.source, material: d.material, notAccepted: d.notAccepted }, 'School: ' + r.source.name + '. Say yes or tap Yes.');
-      if (d.notAccepted) return this._stage({ kind: 'MATERIAL', material: mat }, 'Not accepted. Log as WASTE? Say yes or tap Yes.');
-      this.st.material = mat.code; this.draft = {}; this._go('weight');
-      return this._out('Material: ' + mat.say + '. ' + this.prompt());
+    var miss = this._missing();
+    if (miss.length) {
+      this._go(miss[0]);
+      var heard = this._heard();
+      return this._out((heard ? 'Heard: ' + heard + '. ' : '') + this._askMissing(), { reask: true, missing: miss });
     }
-    var rec = { text: r.text, weightLb: d.weightLb, value: d.value, unit: d.unit, converted: d.converted, rounded: d.rounded,
-      material: mat, notAccepted: !!(d.notAccepted && d.material), source: src };
+    var rec = { text: r ? r.text : '', weightLb: d.weightLb, value: d.value, unit: d.unit, converted: d.converted, rounded: d.rounded,
+      material: mat, notAccepted: !!(d.notAccepted && d.material), source: src, askBags: this.st.bagsSeparated !== true };
     rec.needsExtra = rec.weightLb > cfg.weight.extraConfirmAboveLb;
     return this._stage({ kind: 'WEIGH', rec: rec }, weighReadback(rec, cfg));
   };
+  /** Resolve "which one?" for schools: the reply's distinctive words must fit exactly one candidate. */
+  function pickChoice(text, cands, cfg) {
+    var fill = {}; (cfg.schoolFillerWords || []).forEach(function (w) { if (w !== 'middle' && w !== 'elementary' && w !== 'high') fill[w] = 1; });
+    var words = tokens(text).filter(function (w) { return !has(FILLER, w) && !has(fill, w) && !/^\d/.test(w) && w !== 'one'; });
+    if (!words.length) return null;
+    var hits = cands.filter(function (c) { var t = tokens(c.name).concat(tokens((c.aliases || []).join(' '))); return words.every(function (w) { return t.indexOf(w) >= 0; }); });
+    return hits.length === 1 ? hits[0] : null;
+  }
 
   /** 'yes' / 'no' (tap) or spoken text. Only 'yes' with something pending can write. */
   Session.prototype.answer = function (textOrTap) {
@@ -528,7 +635,12 @@ section h2{font-size:16px;margin:0 0 6px}
       if (this.st.step === 'bags' && a === 'yes') return this.tapBagsYes();
       return this._out('Nothing to confirm. ' + this.prompt(), { result: 'nothing_pending' });
     }
-    if (a === 'no') { this.pending = null; this.draft = {}; this._go(p.backStep === 'confirm' ? 'school' : p.backStep); return this._out('Not saved. ' + this.prompt(), { result: 'discarded' }); }
+    if (a === 'no') {
+      this.pending = null; this.draft = {};
+      var back = p.backStep === 'confirm' ? 'school' : p.backStep;
+      if (p.kind === 'WEIGH' && (back === 'who' || back === 'bags')) back = this.st.sourceCode ? 'material' : 'school';
+      this._go(back); return this._out('Not saved. ' + (p.kind === 'WEIGH' ? 'Say it again. ' : '') + this.prompt(), { result: 'discarded' });
+    }
     if (a !== 'yes') return this._out('Say yes or no, or tap Yes or No.', { result: 'wait' });
     if (p.kind === 'WEIGH' && p.rec.needsExtra && !p.extraOk) {
       p.extraOk = true;
@@ -551,6 +663,7 @@ section h2{font-size:16px;margin:0 0 6px}
     if (L && L.src === rec.source.code && L.mat === rec.material.code && L.lbs === rec.weightLb && now - L.t < cfg.duplicateWindowMs) {
       this._go('next'); return this._out('That weight was just recorded. Not saved again.', { result: 'duplicate' });
     }
+    if (rec.askBags) st.bagsSeparated = true;
     var n = this.store._append(toPracticeRow(rec, st, cfg, now));
     st.sourceCode = rec.source.code; st.material = rec.material.code;
     st.last = { src: rec.source.code, mat: rec.material.code, lbs: rec.weightLb, t: now };
@@ -700,8 +813,8 @@ section h2{font-size:16px;margin:0 0 6px}
         t + ' \u00b7 ' + r.Lbs + ' lb \u00b7 ' + r.Material + ' \u00b7 ' + r['Source Code'] + (r._converted ? ' (converted from ' + r._value + ' ' + r._unit + ')' : '')));
     });
     if (out && out.say) speak(out.say, function () {
-      // hands-free: after a readback, listen once for yes/no (tap still works; iOS may refuse a mic start without a tap)
-      if (session.pending && SR && !listener.disabled && !listener.listening) listener.start('yesno');
+      // hands-free: after a readback (yes/no) or a missing-field question, listen once more (tap still works; iOS may refuse a mic start without a tap)
+      if ((session.pending || (out.missing && out.missing.length)) && SR && !listener.disabled && !listener.listening) listener.start(session.pending ? 'yesno' : 'missing');
     });
   }
   render({ say: session.prompt() });
