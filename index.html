@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<title>Sorter Talk - PRACTICE</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow-x:hidden;font:18px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f4f4;color:#111}
+header{background:#222;color:#fff;padding:10px 14px}
+header h1{font-size:18px;margin:0}
+header small{display:block;color:#ddd;font-size:13px}
+main{padding:12px;max-width:760px;margin:0 auto}
+#rail{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 10px;padding:0;list-style:none}
+#rail li{font-size:12px;padding:4px 7px;border-radius:12px;background:#ddd;color:#333}
+#rail li.on{background:#111;color:#fff;font-weight:700}
+#prompt{font-size:22px;font-weight:700;min-height:2.6em;background:#fff;border:2px solid #111;border-radius:10px;padding:12px;margin-bottom:10px}
+#heard{font-size:14px;color:#555;min-height:1.2em;margin:-4px 0 8px}
+button{font:700 20px system-ui,sans-serif;border-radius:12px;border:2px solid #111;background:#fff;color:#111;padding:16px 12px;min-height:64px;cursor:pointer}
+button:active{transform:scale(.98)}
+.big{width:100%;margin:6px 0}
+#talk{background:#111;color:#fff;font-size:26px;min-height:84px}
+#talk.listening{background:#fff;color:#111;border-style:dashed}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:8px 0}
+.grid button small{display:block;font-weight:400;font-size:13px}
+#yesno{display:none;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+#yes{background:#111;color:#fff;font-size:30px;min-height:90px}
+#no{font-size:30px;min-height:90px}
+#textRow{display:flex;gap:8px;margin:8px 0}
+#text{flex:1;min-width:0;width:100%;font-size:20px;padding:12px;border:2px solid #111;border-radius:10px;min-height:56px}
+#send{flex:0 0 auto;min-width:84px}
+section{background:#fff;border:1px solid #bbb;border-radius:10px;padding:10px;margin-top:12px}
+section h2{font-size:16px;margin:0 0 6px}
+#log{list-style:none;margin:0;padding:0;font-size:15px}
+#log li{border-bottom:1px solid #ddd;padding:6px 0}
+.note{font-size:13px;color:#444}
+</style>
+</head>
+<body>
+<header><h1>Sorter Talk &middot; PRACTICE</h1><small>Practice only. Nothing is sent anywhere. Saved on this device only, after you say or tap Yes.</small></header>
+<main>
+  <ol id="rail" aria-label="Steps"></ol>
+  <div id="prompt" role="status" aria-live="assertive"></div>
+  <div id="heard" aria-live="polite"></div>
+  <button type="button" id="talk" class="big">&#127908; Talk</button>
+  <div id="textRow">
+    <input id="text" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"
+      placeholder="Or tap here and use the keyboard mic" aria-label="Type or dictate">
+    <button type="button" id="send">Send</button>
+  </div>
+  <div id="yesno"><button type="button" id="yes">YES</button><button type="button" id="no">NO</button></div>
+  <div id="stepButtons"></div>
+  <section>
+    <h2>Practice log (this device only)</h2>
+    <button type="button" id="undo" class="big">Undo last</button>
+    <ul id="log"></ul>
+  </section>
+  <section class="note">
+    <b>Try:</b> "start" &rarr; "yes colors separated" &rarr; "School A" &rarr; "25 pounds number 2" &rarr; "yes".<br>
+    <b>Mic note:</b> the Talk button uses the browser's speech service (in Chrome this may send audio to Google). The keyboard mic uses your phone's own dictation. Both are optional; typing works too.
+    <div id="caps"></div>
+  </section>
+</main>
+<script>
+/**
+ * Sorter Talk practice config: the ONE data object the page reads. Edit here to change bins, order, words, schools.
+ * Schools are generic placeholders (School A, School B, ...). ES5. node: module.exports; browser: window.SorterTalkConfig.
+ */
+(function (root) {
+  'use strict';
+  var CONFIG = {
+    version: 'sorter-talk-config-2026-10-17b',
+    weight: { minLb: 0.1, maxLb: null, decimals: 1, extraConfirmAboveLb: 250, kgToLb: 2.20462, ozToLb: 0.0625, defaultUnit: 'lb' },
+    minSpeechConfidence: 0.5,
+    duplicateWindowMs: 4000,
+    listen: { hardTimeoutMs: 8000, abortGraceMs: 1500 },
+    practice: { workerId: 'practice', stationId: 'PRACTICE', weightCategory: 'crv_scrap' },
+    weightLogColumns: ['Timestamp', 'Worker ID', 'Source Code', 'Color', 'Material', 'Lbs',
+      'Bag ID', 'Station ID', 'Session ID', 'Segregated',
+      'Confirmed By Worker ID', 'Weight Category'],
+    flow: {
+      steps: ['who', 'bags', 'school', 'material', 'weight', 'confirm', 'next'],
+      prompts: {
+        who: 'Practice mode. Say "start" or tap Start.',
+        bags: 'Are the bags separated by color? Say yes.',
+        school: 'Which school? Say the name or tap it.',
+        material: 'What material? Say the bin.',
+        weight: 'How much does this bin weigh? Say pounds.',
+        confirm: 'Say yes or tap Yes to record.',
+        next: 'What next? Weigh another, change material, back to sorting, or finished with this school.'
+      }
+    },
+    materials: [
+      { code: 'PLASTIC', label: 'PLASTIC', sub: 'Bottles & containers', say: 'plastic', crv: true,
+        aliases: ['plastic', 'plastics', 'pet', 'number 1', 'number one', 'water bottle', 'water bottles', 'soda bottle', 'soda bottles',
+          'plastic bottle', 'plastic bottles', 'crv plastic', 'clear plastic'] },
+      { code: 'HDPE', label: 'HDPE', sub: 'Hard plastic #2', say: 'HDPE, number 2', crv: true,
+        aliases: ['hdpe', 'hdp', 'number 2', 'number two', 'two plastic', 'type two', 'type 2', 'milk jug', 'milk jugs', 'jug', 'jugs',
+          'detergent bottle', 'detergent bottles', 'shampoo bottle', 'shampoo bottles', 'high density'] },
+      { code: 'PP', label: 'PP', sub: 'Plastic #5 (practice only)', say: 'PP, number 5', crv: null, practiceOnly: true,
+        aliases: ['pp', 'p p', 'number 5', 'number five', 'five plastic', 'polypropylene', 'yogurt cup', 'yogurt cups', 'cap', 'caps'] },
+      { code: 'ALUMINUM', label: 'ALUMINUM', sub: 'Cans', say: 'aluminum', crv: true,
+        aliases: ['aluminum', 'aluminium', 'can', 'cans', 'soda can', 'soda cans', 'tin'] },
+      { code: 'GLASS', label: 'GLASS', sub: 'Bottles & jars', say: 'glass', crv: true,
+        aliases: ['glass', 'glass bottle', 'glass bottles', 'jar', 'jars'] },
+      { code: 'COMPOST', label: 'COMPOST', sub: 'Organics', say: 'compost', crv: false,
+        aliases: ['compost', 'food', 'food waste', 'organics', 'organic', 'green', 'scraps'] },
+      { code: 'WASTE', label: 'WASTE', sub: 'Landfill', say: 'waste', crv: false,
+        aliases: ['waste', 'trash', 'garbage', 'landfill', 'contamination', 'contaminated', 'dirty'],
+        notAcceptedAliases: ['styrofoam', 'foam', 'number 6', 'number six', 'ps', 'polystyrene'] }
+    ],
+    sources: [
+      { code: 'SCHOOL-A', name: 'School A', aliases: ['school a', 'school ay'] },
+      { code: 'SCHOOL-B', name: 'School B', aliases: ['school b', 'school bee', 'school be'] },
+      { code: 'SCHOOL-C', name: 'School C', aliases: ['school c', 'school see', 'school sea'] },
+      { code: 'SCHOOL-D', name: 'School D', aliases: ['school d', 'school dee'] },
+      { code: 'SCHOOL-E', name: 'School E', aliases: ['school e'] },
+      { code: 'SCHOOL-F', name: 'School F', aliases: ['school f'] },
+      { code: 'SCHOOL-G', name: 'School G', aliases: ['school g', 'school gee'] },
+      { code: 'SCHOOL-H', name: 'School H', aliases: ['school h'] },
+      { code: 'SCHOOL-I', name: 'School I', aliases: ['school i', 'school eye'] },
+      { code: 'SCHOOL-J', name: 'School J', aliases: ['school j', 'school jay'] },
+      { code: 'SCHOOL-K', name: 'School K', aliases: ['school k', 'school kay'] }
+    ]
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = CONFIG;
+  else root.SorterTalkConfig = CONFIG;
+})(this);
+
+</script>
+<script>
+/**
+ * Sorter Talk core: pure parser + Session (flow and confirm gate) + ListenController.
+ * No network, no server calls, no AI. Everything list-like (bins, words, schools) comes from the config object.
+ * ES5. node: module.exports; browser: window.SorterTalk.
+ */
+(function (root) {
+  'use strict';
+
+  // ---- numbers, units, yes/no ----
+  var ONES = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+    ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+    seventeen: 17, eighteen: 18, nineteen: 19 };
+  var TENS = { twenty: 20, thirty: 30, forty: 40, fourty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+  var HOMOPHONES = { to: 2, too: 2, for: 4, fore: 4, won: 1, ate: 8 };
+  var DECIMAL_DIGIT = { zero: '0', oh: '0', o: '0', one: '1', two: '2', three: '3', four: '4', five: '5',
+    six: '6', seven: '7', eight: '8', nine: '9' };
+  var UNITS = { pound: 'lb', pounds: 'lb', lb: 'lb', lbs: 'lb', kilo: 'kg', kilos: 'kg', kilogram: 'kg',
+    kilograms: 'kg', kg: 'kg', kgs: 'kg', ounce: 'oz', ounces: 'oz', oz: 'oz' };
+  var NO_WORDS = ['no', 'nope', 'cancel', 'wrong', 'stop', 'nah', 'negative'];
+  var YES_WORDS = ['yes', 'yeah', 'yep', 'yup', 'correct', 'save', 'confirm', 'ok', 'okay', 'sure', 'right', 'affirmative'];
+
+  function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  function isNum(t) { return /^\d+(\.\d+)?$/.test(String(t)); }
+  function round1(x) { return Math.round(x * 10) / 10; }
+  function pad3(n) { var s = String(n); while (s.length < 3) s = '0' + s; return s; }
+
+  function normalize(text) {
+    var s = String(text == null ? '' : text).toLowerCase();
+    s = s.replace(/[\u2018\u2019']/g, '');
+    s = s.replace(/&/g, ' and ');
+    s = s.replace(/#\s*(\d)/g, ' number $1');               // "#2" -> "number 2"
+    s = s.replace(/\b(no|num|nr)\.\s*(\d)/g, ' number $2');  // "no. 2" -> "number 2"
+    s = s.replace(/(\d),(\d{3})\b/g, '$1$2');
+    s = s.replace(/(\d)\.(\d)/g, '$1\u0001$2');
+    s = s.replace(/(\d)([a-z])/g, '$1 $2').replace(/([a-z])(\d)/g, '$1 $2');
+    s = s.replace(/[^a-z0-9\u0001]+/g, ' ');
+    s = s.replace(/\u0001/g, '.');
+    s = s.replace(/\bh d p e\b/g, 'hdpe').replace(/\bp e t\b/g, 'pet').replace(/\ba luminum\b/g, 'aluminum');
+    return s.replace(/\s+/g, ' ').trim();
+  }
+  function isUnit(t) { return t != null && has(UNITS, t); }
+  function numberize(toks) {
+    var out = [], i = 0;
+    while (i < toks.length) {
+      var t = toks[i], nx = toks[i + 1];
+      if ((t === 'a' || t === 'an') && isUnit(nx)) { out.push('1'); i++; continue; }
+      if (t === 'half' && (isUnit(nx) || ((nx === 'a' || nx === 'an') && isUnit(toks[i + 2])))) {
+        out.push('0.5'); i += (isUnit(nx) ? 1 : 2); continue;
+      }
+      var starts = isNum(t) || has(ONES, t) || has(TENS, t) ||
+        ((t === 'a' || t === 'an') && (nx === 'hundred' || nx === 'thousand')) ||
+        (t === 'point' && has(DECIMAL_DIGIT, nx || '')) ||
+        (has(HOMOPHONES, t) && isUnit(nx));
+      if (!starts) { out.push(t); i++; continue; }
+      var r = parseNumberRun(toks, i);
+      if (r.end === i) { out.push(t); i++; continue; }
+      out.push(String(Math.round(r.value * 1000) / 1000));
+      i = r.end;
+    }
+    return out;
+  }
+  function parseNumberRun(toks, i) {
+    var total = 0, cur = 0, got = false, last = '', dec = null, frac = 0, j = i;
+    while (j < toks.length) {
+      var t = toks[j];
+      if (isNum(t)) { if (got) break; cur += parseFloat(t); got = true; last = 'digits'; j++; continue; }
+      if (has(ONES, t)) { if (got && last !== 'tens' && last !== 'hundred' && last !== 'thousand') break; cur += ONES[t]; got = true; last = 'ones'; j++; continue; }
+      if (has(TENS, t)) { if (got && last !== 'hundred' && last !== 'thousand') break; cur += TENS[t]; got = true; last = 'tens'; j++; continue; }
+      if (has(HOMOPHONES, t) && (!got || last === 'tens') && isUnit(toks[j + 1])) { cur += HOMOPHONES[t]; got = true; last = 'ones'; j++; continue; }
+      if ((t === 'a' || t === 'an') && !got && (toks[j + 1] === 'hundred' || toks[j + 1] === 'thousand')) { j++; continue; }
+      if (t === 'hundred') { cur = (cur || 1) * 100; got = true; last = 'hundred'; j++; continue; }
+      if (t === 'thousand') { total += (cur || 1) * 1000; cur = 0; got = true; last = 'thousand'; j++; continue; }
+      if (t === 'and' && got) {
+        if (toks[j + 1] === 'a' && toks[j + 2] === 'half') { frac = 0.5; j += 3; break; }
+        if (toks[j + 1] === 'a' && toks[j + 2] === 'quarter') { frac = 0.25; j += 3; break; }
+        if ((last === 'hundred' || last === 'thousand') && (has(ONES, toks[j + 1] || '') || has(TENS, toks[j + 1] || ''))) { j++; continue; }
+        break;
+      }
+      if (t === 'point') {
+        var digs = '', k = j + 1;
+        while (k < toks.length) {
+          if (has(DECIMAL_DIGIT, toks[k])) { digs += DECIMAL_DIGIT[toks[k]]; k++; continue; }
+          if (/^\d+$/.test(toks[k])) { digs += toks[k]; k++; continue; }
+          break;
+        }
+        if (!digs) break;
+        dec = digs; got = true; j = k; break;
+      }
+      break;
+    }
+    if (!got) return { value: 0, end: i };
+    var value = total + cur;
+    if (dec != null) value = parseFloat(String(Math.floor(value)) + '.' + dec);
+    return { value: value + frac, end: j };
+  }
+  function tokens(text) { var s = normalize(text); return s ? numberize(s.split(' ')) : []; }
+  function parseYesNo(text) {
+    var s = normalize(text);
+    if (!s) return null;
+    if (/\b(dont|do not|not right|not correct|no way)\b/.test(s)) return 'no';
+    var w = s.split(' ');
+    if (w.some(function (x) { return NO_WORDS.indexOf(x) >= 0; })) return 'no';
+    if (w.some(function (x) { return YES_WORDS.indexOf(x) >= 0; })) return 'yes';
+    return null;
+  }
+
+  // ---- config-driven phrase matching (materials, not-accepted aliases, sources) ----
+  function buildLexicon(cfg) {
+    var lex = [];
+    function add(kind, ref, phrase, extra) { var t = tokens(phrase); if (t.length) lex.push({ toks: t, kind: kind, ref: ref, phrase: t.join(' '), notAccepted: !!extra }); }
+    (cfg.materials || []).forEach(function (m) {
+      add('material', m, m.code); add('material', m, m.label);
+      (m.aliases || []).forEach(function (x) { add('material', m, x); });
+      (m.notAcceptedAliases || []).forEach(function (x) { add('material', m, x, true); });
+    });
+    (cfg.sources || []).forEach(function (s) {
+      add('source', s, s.name); add('source', s, s.code);
+      (s.aliases || []).forEach(function (x) { add('source', s, x); });
+    });
+    lex.sort(function (x, y) { return y.toks.length - x.toks.length; });
+    return lex;
+  }
+  function findPhrases(toks, used, lex, kind) {
+    var hits = [];
+    for (var p = 0; p < lex.length; p++) {
+      var L = lex[p];
+      if (L.kind !== kind) continue;
+      for (var i = 0; i + L.toks.length <= toks.length; i++) {
+        var ok = true;
+        for (var k = 0; k < L.toks.length; k++) if (used[i + k] || toks[i + k] !== L.toks[k]) { ok = false; break; }
+        if (!ok) continue;
+        for (k = 0; k < L.toks.length; k++) used[i + k] = true;
+        hits.push({ ref: L.ref, at: i, phrase: L.phrase, notAccepted: L.notAccepted });
+      }
+    }
+    return hits;
+  }
+  function uniqRefs(hits) { var out = []; hits.forEach(function (h) { if (out.indexOf(h.ref) < 0) out.push(h.ref); }); return out; }
+  function lexFor(cfg) {
+    if (!cfg.__lex) Object.defineProperty(cfg, '__lex', { value: buildLexicon(cfg), enumerable: false, writable: true, configurable: true });
+    return cfg.__lex;
+  }
+
+  var INTENTS = [
+    ['UNDO', /\bundo\b/], ['WRONG_SCHOOL', /\b(wrong school|not the school|thats not the school)\b/],
+    ['FINISH_SCHOOL', /\b(finished|done) with\b|\bfinish(ed)? (this |the )?school\b/],
+    ['CHANGE_MATERIAL', /\bchange (the )?material\b/], ['WEIGH_ANOTHER', /\b(weigh another|same again|another bin)\b/],
+    ['BACK_TO_SORTING', /\bback to sorting\b/], ['HELP', /\b(help|whats next|what next|next step)\b/],
+    ['BAGS_YES', /\b(colou?rs? (are )?separated|bags are (sorted|separated))\b/],
+    ['START', /^(start|practice|practice mode|im ready|i am ready|ready)$/]
+  ];
+  var FILLER = { um: 1, uh: 1, the: 1, this: 1, is: 1, its: 1, and: 1, weight: 1, weighs: 1, of: 1, bin: 1, bag: 1, bags: 1,
+    please: 1, a: 1, an: 1, that: 1, was: 1, from: 1, for: 1, to: 1, at: 1, mark: 1, it: 1, now: 1, school: 1, empty: 1, emptied: 1,
+    about: 1, i: 1, have: 1, got: 1, record: 1, log: 1, put: 1, in: 1 };
+
+  /**
+   * Parse one utterance against the config. Pure. Does not look at session state.
+   * -> { intent, material, notAccepted, source, weightLb, value, unit, converted, rounded, unitAssumed, heardUnknown, errors[], ambiguous }
+   */
+  function parse(text, cfg) {
+    var lex = lexFor(cfg), W = cfg.weight;
+    var res = { text: String(text == null ? '' : text), intent: null, material: null, notAccepted: false, source: null,
+      weightLb: null, value: null, unit: null, converted: false, rounded: false, unitAssumed: false, heardUnknown: null, errors: [], ambiguous: null };
+    var norm = normalize(text);
+    if (!norm) { res.errors.push('empty'); return res; }
+    for (var q = 0; q < INTENTS.length; q++) if (INTENTS[q][1].test(norm)) { res.intent = INTENTS[q][0]; break; }
+    if (res.intent && res.intent !== 'BAGS_YES' && res.intent !== 'START') {
+      if (res.intent !== 'FINISH_SCHOOL') return res;
+    }
+    var toks = tokens(text), used = toks.map(function () { return false; }), i;
+    // school: name / alias
+    {
+      var sH = uniqRefs(findPhrases(toks, used, lex, 'source'));
+      if (sH.length > 1) res.ambiguous = { kind: 'source', candidates: sH };
+      else if (sH.length === 1) res.source = sH[0];
+    }
+    if (res.intent === 'FINISH_SCHOOL') return res;
+    if (/^(bag|bag id)? ?bag \d{7}$/.test(norm) || /\bbag \d{7}\b/.test(norm)) { res.errors.push('bag_id_not_available'); return res; }
+    // material
+    var mHits = findPhrases(toks, used, lex, 'material'), mRefs = uniqRefs(mHits);
+    if (mRefs.length > 1) res.ambiguous = res.ambiguous || { kind: 'material', candidates: mRefs };
+    else if (mRefs.length === 1) { res.material = mRefs[0]; res.notAccepted = mHits.some(function (h) { return h.notAccepted; }); }
+    for (i = 0; i + 1 < toks.length; i++) if (!used[i] && toks[i] === 'number' && /^\d+$/.test(toks[i + 1])) { res.heardUnknown = 'number ' + toks[i + 1]; used[i] = used[i + 1] = true; }
+    // weight
+    var wi = -1, unit = null;
+    for (i = 0; i + 1 < toks.length; i++) if (!used[i] && isNum(toks[i]) && has(UNITS, toks[i + 1])) { wi = i; unit = UNITS[toks[i + 1]]; used[i] = used[i + 1] = true; break; }
+    var bare = [];
+    for (i = 0; i < toks.length; i++) if (!used[i] && isNum(toks[i])) bare.push(i);
+    if (wi < 0 && bare.length === 1) {
+      wi = bare[0]; unit = W.defaultUnit || 'lb'; res.unitAssumed = true; used[wi] = true;
+      var v0 = parseFloat(toks[wi]);
+      // "three plastic": 3 lb of plastic or "#3"? ask (resin words that ARE bins are aliases, e.g. "two plastic").
+      if (toks[wi + 1] === 'plastic' && Math.floor(v0) === v0 && v0 >= 1 && v0 <= 7) { res.errors.push('resin_or_weight'); res.ambiguous = res.ambiguous || { kind: 'resin_or_weight', number: v0 }; }
+    } else if (wi < 0 && bare.length > 1) res.errors.push('weight_ambiguous');
+    else if (wi >= 0 && bare.length) {
+      var lv = parseFloat(toks[bare[0]]);
+      if (Math.floor(lv) === lv && lv >= 1 && lv <= 7) { res.errors.push('resin_or_weight'); res.ambiguous = res.ambiguous || { kind: 'resin_or_weight', number: lv }; }
+      else res.errors.push('weight_ambiguous');
+    }
+    if (wi >= 0) {
+      var v = parseFloat(toks[wi]);
+      var raw = unit === 'kg' ? v * W.kgToLb : (unit === 'oz' ? v * W.ozToLb : v);
+      var f = Math.pow(10, W.decimals), lb = Math.round(raw * f) / f;
+      res.value = v; res.unit = unit; res.converted = unit !== 'lb';
+      res.rounded = !res.converted && lb !== v;
+      if (!(lb > 0) || lb < W.minLb) res.errors.push('weight_not_positive');
+      else if (W.maxLb != null && lb > W.maxLb) res.errors.push('weight_out_of_range');
+      else res.weightLb = lb;
+    }
+    var unknown = [];
+    for (i = 0; i < toks.length; i++) if (!used[i] && !has(UNITS, toks[i]) && !has(FILLER, toks[i])) unknown.push(toks[i]);
+    if (!res.material && !res.heardUnknown && unknown.length) res.heardUnknown = unknown.join(' ');
+    if (!res.intent) {
+      if (/\b(empty|emptied)\b/.test(norm)) res.intent = 'EMPTY_BIN';
+      else if (res.material || res.value != null || res.source || res.heardUnknown || res.ambiguous) res.intent = 'SLOTS';
+      else res.errors.push('not_understood');
+    }
+    return res;
+  }
+
+  function fmt(n) { return String(Math.round(n * 10) / 10); }
+  var UNIT_WORD = { lb: 'pounds', kg: 'kilograms', oz: 'ounces' };
+  function binWords(cfg) { return (cfg.materials || []).map(function (m) { return m.label; }).join(', '); }
+  function weightWords(d) {
+    if (d.converted) return fmt(d.value) + ' ' + UNIT_WORD[d.unit] + ', about ' + fmt(d.weightLb) + ' pounds';
+    return fmt(d.weightLb) + ' pounds' + (d.rounded ? ' (rounded to 0.1)' : '');
+  }
+  /** Readback for a fully-filled weigh record d = {weightLb,value,unit,converted,rounded,material,notAccepted,source}. */
+  function weighReadback(d, cfg) {
+    var pre = d.notAccepted ? 'Not accepted. Log as WASTE? ' : '';
+    var big = d.weightLb > cfg.weight.extraConfirmAboveLb ? ' That\u2019s over ' + cfg.weight.extraConfirmAboveLb + ' pounds. Is that right?' : '';
+    return pre + weightWords(d) + ' of ' + d.material.say + ' for ' + d.source.name + '.' + big + ' Say yes or tap Yes.';
+  }
+  function reask(r, cfg) {
+    var bins = binWords(cfg);
+    if (!r || r.errors.indexOf('empty') >= 0) return 'I did not hear anything. Please say it again.';
+    if (r.errors.indexOf('low_confidence') >= 0) return 'I did not catch that clearly. Please say it again.';
+    if (r.errors.indexOf('bag_id_not_available') >= 0) return 'Bag ID lookup is not available in practice. Say or tap the school.';
+    if (r.ambiguous) {
+      var A = r.ambiguous;
+      if (A.kind === 'resin_or_weight') return 'Did you mean number ' + A.number + ', or ' + A.number + ' pounds? Say it again, like "25 pounds, number 2".';
+      return 'Which one: ' + A.candidates.map(function (c) { return c.name || c.label; }).join(', ') + '?';
+    }
+    if (r.errors.indexOf('weight_not_positive') >= 0) return 'Weight must be more than 0 pounds. Say it again.';
+    if (r.errors.indexOf('weight_ambiguous') >= 0) return 'I heard more than one number. Say one weight, like "25 pounds".';
+    if (r.heardUnknown && !r.material) return 'I heard "' + r.heardUnknown + '". That is not a bin here. Say one of: ' + bins + '.';
+    return 'Sorry, I did not understand. Try "25 pounds plastic". Bins: ' + bins + '.';
+  }
+  function lowConfidence(confidence, cfg) { var c = Number(confidence); return c > 0 && c < cfg.minSpeechConfidence; }
+
+  // ---- practice store (localStorage-shaped backend) ----
+  var LOG_KEY = 'sorterTalkPracticeLog_v1', STATE_KEY = 'sorterTalkSession_v1';
+  function Store(backend) { this.b = backend; }
+  Store.prototype.all = function () { try { return JSON.parse(this.b.getItem(LOG_KEY) || '[]') || []; } catch (e) { return []; } };
+  Store.prototype._save = function (a) { this.b.setItem(LOG_KEY, JSON.stringify(a)); };
+  Store.prototype._append = function (rec) { var a = this.all(); a.push(rec); this._save(a); return a.length; };
+  Store.prototype.undoLast = function () { var a = this.all(); var x = a.pop() || null; this._save(a); return x; };
+  function memoryBackend() { var m = {}; return { getItem: function (k) { return has(m, k) ? m[k] : null; }, setItem: function (k, v) { m[k] = String(v); } }; }
+
+  function toPracticeRow(d, st, cfg, now) {
+    return {
+      'Timestamp': new Date(now).toISOString(), 'Worker ID': cfg.practice.workerId, 'Source Code': d.source.code,
+      'Color': '', 'Material': d.material.code, 'Lbs': d.weightLb, 'Bag ID': '',
+      'Station ID': cfg.practice.stationId, 'Session ID': st.sessionId, 'Segregated': st.bagsSeparated === true,
+      'Confirmed By Worker ID': '', 'Weight Category': cfg.practice.weightCategory,
+      _practice: true, _kind: 'weigh', _heard: d.text || '', _unit: d.unit, _value: d.value, _converted: !!d.converted, _notAccepted: !!d.notAccepted
+    };
+  }
+
+  /**
+   * Session = flow + confirm gate. The ONLY path that writes the practice log is _commit(), reached only from answer('yes').
+   * Pending items live in memory only, so a reload/resume can never replay a saved (or unsaved) entry.
+   */
+  function Session(cfg, backend, opts) {
+    opts = opts || {};
+    this.cfg = cfg; this.b = backend; this.store = new Store(backend);
+    this.now = opts.now || function () { return Date.now(); };
+    var s = null;
+    try { s = JSON.parse(backend.getItem(STATE_KEY) || 'null'); } catch (e) { s = null; }
+    this.st = s || { step: 'who', bagsSeparated: false, sourceCode: null, material: null, sessionId: 'PRACTICE-' + this.now(), last: null };
+    this.pending = null; this.draft = {};
+    if (this.st.step === 'confirm') this.st.step = this.st.sourceCode ? (this.st.material ? 'weight' : 'material') : 'school';
+  }
+  Session.prototype._persist = function () { this.b.setItem(STATE_KEY, JSON.stringify(this.st)); };
+  Session.prototype._go = function (step) { this.st.step = step; this._persist(); };
+  Session.prototype.prompt = function () { return this.cfg.flow.prompts[this.st.step] || ''; };
+  Session.prototype.source = function () { return sourceByCode(this.cfg, this.st.sourceCode); };
+  Session.prototype.material = function () { return materialByCode(this.cfg, this.st.material); };
+  Session.prototype._stage = function (item, say) { this.pending = item; this.pending.backStep = this.st.step; this._go('confirm'); return { staged: true, say: say, step: 'confirm' }; };
+  Session.prototype._out = function (say, extra) { var o = extra || {}; o.say = say; o.step = this.st.step; o.staged = !!this.pending; return o; };
+
+  // taps
+  Session.prototype.tapStart = function () { if (this.st.step !== 'who') return this._out(this.prompt()); this._go(this.st.bagsSeparated ? 'school' : 'bags'); return this._out(this.prompt()); };
+  Session.prototype.tapBagsYes = function () { if (this.st.step !== 'bags') return this._out(this.prompt()); this.st.bagsSeparated = true; this._go('school'); return this._out('Bags are separated by color. ' + this.prompt()); };
+  Session.prototype.tapSchool = function (code) {
+    var s = sourceByCode(this.cfg, code);
+    if (!s) return this._out('Unknown school.');
+    if (this.st.step === 'who' || this.st.step === 'bags') return this._out(this.prompt());
+    if (this.st.sourceCode && this.st.sourceCode !== code) return this._out(this.source().name + ' is open. Say finished with this school first.');
+    this.st.sourceCode = code; this._go(this.st.material ? 'weight' : 'material');
+    return this._out('School: ' + s.name + '. ' + this.prompt());
+  };
+  Session.prototype.tapMaterial = function (code) {
+    var m = materialByCode(this.cfg, code);
+    if (!m) return this._out('Unknown bin.');
+    if (!this.st.sourceCode) return this._out(this.prompt());
+    this.st.material = code; this._go('weight');
+    return this._out('Material: ' + m.say + '. ' + this.prompt());
+  };
+  Session.prototype.tapYes = function () { return this.answer('yes'); };
+  Session.prototype.tapNo = function () { return this.answer('no'); };
+  Session.prototype.tapUndo = function () { var x = this.store.undoLast(); return this._out(x ? 'Removed last practice entry.' : 'Practice log is empty.'); };
+
+  /** Voice or typed text. */
+  Session.prototype.hear = function (text, confidence) {
+    var cfg = this.cfg;
+    if (lowConfidence(confidence, cfg)) return this._out(reask({ errors: ['low_confidence'] }, cfg), { reask: true });
+    if (this.pending) {
+      var yn = parseYesNo(text);
+      if (yn) return this.answer(yn);
+    }
+    if (!this.pending && this.st.step === 'bags') {
+      var yb = parseYesNo(text);
+      if (yb === 'yes') return this.tapBagsYes();
+      if (yb === 'no') return this._out('Please separate the bags by color first, then say yes.');
+    }
+    var r = parse(text, cfg);
+    if (this.pending) { this.st.step = this.pending.backStep; this.pending = null; }   // a new utterance replaces the pending one (nothing written)
+    var step = this.st.step;
+    if (r.errors.indexOf('empty') >= 0 || r.errors.indexOf('not_understood') >= 0) {
+      return this._out(reask(r, cfg), { reask: true });
+    }
+    switch (r.intent) {
+      case 'START': return this.tapStart();
+      case 'BAGS_YES': return step === 'bags' ? this.tapBagsYes() : this._out(this.prompt());
+      case 'HELP': return this._out(this.prompt());
+      case 'UNDO': {
+        var a = this.store.all();
+        if (!a.length) return this._out('Practice log is empty.');
+        var L = a[a.length - 1];
+        return this._stage({ kind: 'UNDO' }, 'Remove last entry: ' + (L.Lbs != null ? L.Lbs + ' pounds ' : '') + L.Material + '? Say yes or tap Yes.');
+      }
+      case 'WRONG_SCHOOL': this.st.sourceCode = null; this.draft = {}; this._go('school'); return this._out('Wrong school. Going back to pick the school.');
+      case 'FINISH_SCHOOL':
+        if (!this.st.sourceCode) return this._out('No school is open.');
+        return this._stage({ kind: 'FINISH' }, 'Finish ' + this.source().name + '? Make sure every bin is weighed. Say yes or tap Yes.');
+      case 'CHANGE_MATERIAL': case 'BACK_TO_SORTING':
+        if (!this.st.sourceCode) return this._out(this.prompt());
+        this.st.material = null; this._go('material'); return this._out(this.prompt());
+      case 'WEIGH_ANOTHER':
+        if (!this.st.material) return this._out(this.prompt());
+        this._go('weight'); return this._out('Weigh another ' + this.material().label + ' bin. ' + this.prompt());
+    }
+    if (step === 'who' || step === 'bags') return this._out(this.prompt(), { reask: true });
+    if (r.errors.length || r.ambiguous) return this._out(reask(r, cfg), { reask: true });
+    if (r.intent === 'EMPTY_BIN') {
+      if (!r.material) return this._out('Which bin is empty? Say one of: ' + binWords(cfg) + '.', { reask: true });
+      return this._stage({ kind: 'EMPTY', material: r.material }, 'Mark ' + r.material.label + ' bin empty. Say yes or tap Yes.');
+    }
+    // SLOTS: merge with draft/state. One school at a time.
+    if (r.source && this.st.sourceCode && r.source.code !== this.st.sourceCode) return this._out(this.source().name + ' is open. Say finished with this school first.', { reask: true });
+    var d = this.draft;
+    if (r.material) { d.material = r.material; d.notAccepted = r.notAccepted; }
+    if (r.weightLb != null) { d.weightLb = r.weightLb; d.value = r.value; d.unit = r.unit; d.converted = r.converted; d.rounded = r.rounded; }
+    if (!d.material && r.heardUnknown) {
+      if (step === 'school' && d.weightLb == null) return this._out('I heard "' + r.heardUnknown + '". That is not a school on this list. ' + this.prompt(), { reask: true });
+      return this._out(reask(r, cfg), { reask: true });
+    }
+    var src = r.source || this.source();
+    var mat = d.material || this.material();
+    if (!src) {
+      if (r.source === null && !d.material && d.weightLb == null) return this._out(this.prompt(), { reask: true });
+      this._go('school'); return this._out(this.prompt(), { reask: true });
+    }
+    if (!mat) {
+      if (r.source && !this.st.sourceCode && d.weightLb == null) return this._stage({ kind: 'SCHOOL', source: r.source }, 'School: ' + r.source.name + '. Say yes or tap Yes.');
+      this._go('material'); return this._out((r.source ? 'School: ' + src.name + '. ' : '') + 'What material? Say one of: ' + binWords(cfg) + '.', { reask: true });
+    }
+    if (d.weightLb == null) {
+      if (r.source && !this.st.sourceCode) return this._stage({ kind: 'SCHOOL', source: r.source, material: d.material, notAccepted: d.notAccepted }, 'School: ' + r.source.name + '. Say yes or tap Yes.');
+      if (d.notAccepted) return this._stage({ kind: 'MATERIAL', material: mat }, 'Not accepted. Log as WASTE? Say yes or tap Yes.');
+      this.st.material = mat.code; this.draft = {}; this._go('weight');
+      return this._out('Material: ' + mat.say + '. ' + this.prompt());
+    }
+    var rec = { text: r.text, weightLb: d.weightLb, value: d.value, unit: d.unit, converted: d.converted, rounded: d.rounded,
+      material: mat, notAccepted: !!(d.notAccepted && d.material), source: src };
+    rec.needsExtra = rec.weightLb > cfg.weight.extraConfirmAboveLb;
+    return this._stage({ kind: 'WEIGH', rec: rec }, weighReadback(rec, cfg));
+  };
+
+  /** 'yes' / 'no' (tap) or spoken text. Only 'yes' with something pending can write. */
+  Session.prototype.answer = function (textOrTap) {
+    var a = (textOrTap === 'yes' || textOrTap === 'no') ? textOrTap : parseYesNo(textOrTap);
+    var p = this.pending;
+    if (!p) {
+      if (this.st.step === 'bags' && a === 'yes') return this.tapBagsYes();
+      return this._out('Nothing to confirm. ' + this.prompt(), { result: 'nothing_pending' });
+    }
+    if (a === 'no') { this.pending = null; this.draft = {}; this._go(p.backStep === 'confirm' ? 'school' : p.backStep); return this._out('Not saved. ' + this.prompt(), { result: 'discarded' }); }
+    if (a !== 'yes') return this._out('Say yes or no, or tap Yes or No.', { result: 'wait' });
+    if (p.kind === 'WEIGH' && p.rec.needsExtra && !p.extraOk) {
+      p.extraOk = true;
+      return this._out('Over ' + this.cfg.weight.extraConfirmAboveLb + ' pounds confirmed. Say yes again to record.', { result: 'extra_confirm' });
+    }
+    this.pending = null;
+    return this._commit(p);
+  };
+  Session.prototype._commit = function (p) {
+    var st = this.st, cfg = this.cfg, now = this.now();
+    if (p.kind === 'SCHOOL') { st.sourceCode = p.source.code; if (p.material && !p.notAccepted) st.material = p.material.code; this.draft = p.notAccepted ? { material: p.material, notAccepted: true } : {}; this._go(st.material ? 'weight' : 'material'); return this._out('School: ' + p.source.name + '. ' + this.prompt(), { result: 'context' }); }
+    if (p.kind === 'MATERIAL') { st.material = p.material.code; this.draft = {}; this._go('weight'); return this._out('Material: ' + p.material.say + '. ' + this.prompt(), { result: 'context' }); }
+    if (p.kind === 'FINISH') { var nm = this.source().name; st.sourceCode = null; st.material = null; this.draft = {}; this._go('school'); return this._out('School complete: ' + nm + '. ' + this.prompt(), { result: 'context' }); }
+    if (p.kind === 'UNDO') { this.store.undoLast(); this._go(p.backStep); return this._out('Removed last practice entry.', { result: 'undone' }); }
+    if (p.kind === 'EMPTY') {
+      this.store._append({ 'Timestamp': new Date(now).toISOString(), 'Station ID': cfg.practice.stationId, 'Material': p.material.code, _practice: true, _kind: 'bin_empty' });
+      this._go(p.backStep); return this._out('Practice log: ' + p.material.label + ' bin empty.', { result: 'saved' });
+    }
+    var rec = p.rec, L = st.last;
+    if (L && L.src === rec.source.code && L.mat === rec.material.code && L.lbs === rec.weightLb && now - L.t < cfg.duplicateWindowMs) {
+      this._go('next'); return this._out('That weight was just recorded. Not saved again.', { result: 'duplicate' });
+    }
+    var n = this.store._append(toPracticeRow(rec, st, cfg, now));
+    st.sourceCode = rec.source.code; st.material = rec.material.code;
+    st.last = { src: rec.source.code, mat: rec.material.code, lbs: rec.weightLb, t: now };
+    this.draft = {}; this._go('next');
+    return this._out('\u2713 ' + fmt(rec.weightLb) + ' lbs ' + rec.material.label + ' recorded (practice). ' + this.prompt(), { result: 'saved', count: n });
+  };
+  function sourceByCode(cfg, code) { return (cfg.sources || []).filter(function (s) { return s.code === code; })[0] || null; }
+  function materialByCode(cfg, code) { return (cfg.materials || []).filter(function (m) { return m.code === code; })[0] || null; }
+  function sourcesAZ(cfg) { return (cfg.sources || []).slice().sort(function (x, y) { return x.name.localeCompare(y.name); }); }
+
+  // ---- listen controller (iPhone stop-tap fix: 2nd tap stops, hard timeout, onend/onerror always reset) ----
+  var FALLBACK_ERRORS = ['not-allowed', 'service-not-allowed', 'audio-capture', 'network'];
+  function ListenController(SR, cfg, hooks, timers) {
+    this.SR = SR; this.cfg = cfg; this.h = hooks || {};
+    this.t = timers || { set: function (f, ms) { return setTimeout(f, ms); }, clear: function (id) { clearTimeout(id); } };
+    this.rec = null; this.listening = false; this.hard = null; this.grace = null; this.disabled = !SR;
+  }
+  ListenController.prototype.tap = function (purpose) {
+    if (this.listening) { this.stop('second_tap'); return 'stopping'; }
+    return this.start(purpose);
+  };
+  ListenController.prototype.start = function (purpose) {
+    var self = this;
+    if (this.disabled) { this._fallback('no_speech_api'); return 'fallback'; }
+    var r;
+    try { r = new this.SR(); } catch (e) { this._fallback('construct_failed'); return 'fallback'; }
+    this.rec = r; this.listening = true; this.purpose = purpose || 'utterance';
+    r.lang = 'en-US'; r.interimResults = false; r.continuous = false; r.maxAlternatives = 1;
+    var got = false;
+    r.onresult = function (ev) {
+      if (got) return; got = true;
+      var alt = ev && ev.results && ev.results[0] && ev.results[0][0];
+      var p = self.purpose;
+      self.reset('result');
+      if (self.h.onText) self.h.onText(alt ? String(alt.transcript || '') : '', alt ? alt.confidence : undefined, p);
+    };
+    r.onerror = function (ev) {
+      var code = ev && ev.error;
+      self.reset('error');
+      if (FALLBACK_ERRORS.indexOf(String(code)) >= 0) self._fallback(code);
+      else if (self.h.onError) self.h.onError(code);
+    };
+    r.onend = function () { self.reset('end'); };
+    this.hard = this.t.set(function () { self.stop('timeout'); }, this.cfg.listen.hardTimeoutMs);
+    try { r.start(); } catch (e2) { this.reset('start_failed'); this._fallback('start_failed'); return 'fallback'; }
+    if (this.h.onState) this.h.onState('listening', this.purpose);
+    return 'listening';
+  };
+  ListenController.prototype.stop = function (why) {
+    var self = this, r = this.rec;
+    if (!r) { this.reset(why); return; }
+    try { r.stop(); } catch (e) {}
+    if (this.hard != null) { this.t.clear(this.hard); this.hard = null; }
+    if (this.grace == null) this.grace = this.t.set(function () { try { r.abort(); } catch (e) {} self.reset(why === 'timeout' ? 'timeout' : 'forced'); }, this.cfg.listen.abortGraceMs);
+    if (this.h.onState) this.h.onState('stopping', why);
+  };
+  ListenController.prototype.reset = function (why) {
+    if (this.hard != null) { this.t.clear(this.hard); this.hard = null; }
+    if (this.grace != null) { this.t.clear(this.grace); this.grace = null; }
+    var was = this.listening;
+    this.listening = false; this.rec = null;
+    if (this.h.onState) this.h.onState('idle', why, was);
+  };
+  ListenController.prototype._fallback = function (why) {
+    this.disabled = true;
+    if (this.h.onFallback) this.h.onFallback(why);
+  };
+
+  var API = { normalize: normalize, tokens: tokens, parse: parse, parseYesNo: parseYesNo, reask: reask, weighReadback: weighReadback,
+    buildLexicon: buildLexicon, Store: Store, memoryBackend: memoryBackend, Session: Session, ListenController: ListenController,
+    sourcesAZ: sourcesAZ, LOG_KEY: LOG_KEY, STATE_KEY: STATE_KEY };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  else root.SorterTalk = API;
+})(this);
+
+</script>
+<script>
+(function () {
+  'use strict';
+  var C = window.SorterTalkConfig, S = window.SorterTalk;
+  var store = null;
+  try { window.localStorage.setItem('sorterTalkProbe', '1'); store = window.localStorage; } catch (e) { store = S.memoryBackend(); }
+  var session = new S.Session(C, store);
+  function $(id) { return document.getElementById(id); }
+  function el(tag, text, cls) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  var synth = window.speechSynthesis || null;
+  $('caps').textContent = 'Speech API: ' + (SR ? 'yes' : 'no') + ' \u00b7 secure context: ' + String(window.isSecureContext) + ' \u00b7 voice readback: ' + (synth ? 'yes' : 'no');
+
+  function speak(text, then) {
+    if (!synth || !text) { if (then) then(); return; }
+    try {
+      synth.cancel();
+      var u = new SpeechSynthesisUtterance(text); u.lang = 'en-US';
+      var fired = false; function done() { if (fired) return; fired = true; if (then) then(); }
+      u.onend = done; u.onerror = done;
+      setTimeout(done, Math.min(12000, 1500 + text.length * 80)); // some phones never fire onend
+      synth.speak(u);
+    } catch (e) { if (then) then(); }
+  }
+
+  var listener = new S.ListenController(SR, C, {
+    onText: function (t, conf) { $('heard').textContent = 'Heard: "' + t + '"'; render(session.hear(t, conf)); },
+    onState: function (state) {
+      var b = $('talk');
+      if (state === 'listening') { b.classList.add('listening'); b.textContent = 'Listening\u2026 tap to stop'; }
+      else if (state === 'stopping') { b.textContent = 'Stopping\u2026'; }
+      else { b.classList.remove('listening'); b.innerHTML = '&#127908; Talk'; }
+    },
+    onError: function (code) { $('heard').textContent = 'Speech: ' + code + '. Tap Talk again or type.'; },
+    onFallback: function (why) { $('talk').style.display = 'none'; $('heard').textContent = 'Mic not available here (' + why + '). Use the keyboard mic in the box.'; }
+  });
+  if (!SR) $('talk').style.display = 'none';
+  $('talk').onclick = function () { if (synth) try { synth.cancel(); } catch (e) {} listener.tap(); };
+
+  function sendText() { var t = $('text').value.trim(); if (!t) return; $('heard').textContent = 'Typed: "' + t + '"'; $('text').value = ''; render(session.hear(t)); }
+  $('send').onclick = sendText;
+  $('text').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); sendText(); } });
+  $('yes').onclick = function () { render(session.tapYes()); };
+  $('no').onclick = function () { render(session.tapNo()); };
+  $('undo').onclick = function () { render(session.tapUndo()); };
+
+  function btn(label, sub, fn) { var b = el('button', label); b.type = 'button'; if (sub) b.appendChild(el('small', sub)); b.onclick = fn; return b; }
+  function render(out) {
+    var step = session.st.step;
+    var rail = $('rail'); rail.innerHTML = '';
+    C.flow.steps.forEach(function (s) { var li = el('li', s); if (s === step) li.className = 'on'; rail.appendChild(li); });
+    var say = (out && out.say) || session.prompt();
+    var src = session.source();
+    $('prompt').textContent = say + (src && step !== 'confirm' ? '  [School: ' + src.name + ']' : '');
+    $('yesno').style.display = session.pending ? 'grid' : 'none';
+    var box = $('stepButtons'); box.innerHTML = '';
+    var g = el('div', null, 'grid');
+    if (step === 'who') g.appendChild(btn('START', 'practice mode', function () { render(session.tapStart()); }));
+    if (step === 'bags') g.appendChild(btn('YES \u2014 COLORS SEPARATED', null, function () { render(session.tapBagsYes()); }));
+    if (step === 'school') S.sourcesAZ(C).forEach(function (s) { g.appendChild(btn(s.name, null, function () { render(session.tapSchool(s.code)); })); });
+    if (step === 'material') C.materials.forEach(function (m) { g.appendChild(btn(m.label, m.sub, function () { render(session.tapMaterial(m.code)); })); });
+    if (step === 'next') {
+      [['WEIGH ANOTHER BIN', 'weigh another'], ['CHANGE MATERIAL', 'change material'], ['GO BACK TO SORTING', 'back to sorting'], ['FINISHED WITH THIS SCHOOL', 'finished with this school']]
+        .forEach(function (x) { g.appendChild(btn(x[0], null, function () { render(session.hear(x[1])); })); });
+    }
+    box.appendChild(g);
+    var log = $('log'); log.innerHTML = '';
+    session.store.all().slice().reverse().forEach(function (r) {
+      var t = new Date(r.Timestamp).toLocaleTimeString();
+      log.appendChild(el('li', r._kind === 'bin_empty' ? t + ' \u00b7 ' + r.Material + ' bin empty' :
+        t + ' \u00b7 ' + r.Lbs + ' lb \u00b7 ' + r.Material + ' \u00b7 ' + r['Source Code'] + (r._converted ? ' (converted from ' + r._value + ' ' + r._unit + ')' : '')));
+    });
+    if (out && out.say) speak(out.say, function () {
+      // hands-free: after a readback, listen once for yes/no (tap still works; iOS may refuse a mic start without a tap)
+      if (session.pending && SR && !listener.disabled && !listener.listening) listener.start('yesno');
+    });
+  }
+  render({ say: session.prompt() });
+})();
+</script>
+</body>
+</html>
