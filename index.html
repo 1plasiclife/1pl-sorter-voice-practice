@@ -2,67 +2,85 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
-<title>Sorter Talk - PRACTICE</title>
+<title>Pedal voice demo - PRACTICE</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;overflow-x:hidden;font:18px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f4f4;color:#111}
+body{margin:0;font:18px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f4f4;color:#111}
 header{background:#222;color:#fff;padding:10px 14px}
-header h1{font-size:18px;margin:0}
+header h1{font-size:19px;margin:0}
 header small{display:block;color:#ddd;font-size:13px}
-main{padding:12px;max-width:760px;margin:0 auto}
-#rail{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 10px;padding:0;list-style:none}
-#rail li{font-size:12px;padding:4px 7px;border-radius:12px;background:#ddd;color:#333}
-#rail li.on{background:#111;color:#fff;font-weight:700}
-#prompt{font-size:22px;font-weight:700;min-height:2.6em;background:#fff;border:2px solid #111;border-radius:10px;padding:12px;margin-bottom:10px}
-#heard{font-size:14px;color:#555;min-height:1.2em;margin:-4px 0 8px}
-button{font:700 20px system-ui,sans-serif;border-radius:12px;border:2px solid #111;background:#fff;color:#111;padding:16px 12px;min-height:64px;cursor:pointer}
-button:active{transform:scale(.98)}
-.big{width:100%;margin:6px 0}
-#talk{background:#111;color:#fff;font-size:26px;min-height:84px}
-#talk.listening{background:#fff;color:#111;border-style:dashed}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:8px 0}
-.grid button small{display:block;font-weight:400;font-size:13px}
-#yesno{display:none;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
-#yes{background:#111;color:#fff;font-size:30px;min-height:90px}
-#no{font-size:30px;min-height:90px}
-#textRow{display:flex;gap:8px;margin:8px 0}
-#text{flex:1;min-width:0;width:100%;font-size:20px;padding:12px;border:2px solid #111;border-radius:10px;min-height:56px}
-#send{flex:0 0 auto;min-width:84px}
-section{background:#fff;border:1px solid #bbb;border-radius:10px;padding:10px;margin-top:12px}
-section h2{font-size:16px;margin:0 0 6px}
-#log{list-style:none;margin:0;padding:0;font-size:15px}
-#log li{border-bottom:1px solid #ddd;padding:6px 0}
-.note{font-size:13px;color:#444}
+main{padding:10px;max-width:820px;margin:0 auto}
+section{background:#fff;border:2px solid #111;border-radius:10px;padding:10px;margin:0 0 10px}
+h2{font-size:16px;margin:0 0 6px}
+#caps{font:13px/1.4 monospace;white-space:pre-wrap;word-break:break-word;margin:0}
+#pedalInd{font-size:26px;font-weight:800;text-align:center;padding:14px;border-radius:10px;background:#ddd;color:#555}
+#pedalInd.on{background:#0a7d22;color:#fff}
+#lastKey{font:14px monospace;margin-top:6px}
+#pedalBadge{position:sticky;top:0;z-index:5;font-size:24px;font-weight:800;text-align:center;padding:12px;border-radius:10px;background:#555;color:#fff;margin:0 0 10px;border:3px solid #111}
+#pedalBadge.hit{background:#0a7d22}
+#pedalBadge.flash{background:#ffd600;color:#111}
+#keyLog{font:13px/1.35 monospace;white-space:pre;overflow-x:auto;margin:6px 0 0;background:#111;color:#0f0;padding:6px;border-radius:6px;min-height:3em}
+#state{font-size:30px;font-weight:800;text-align:center;padding:16px;border-radius:10px;background:#eee}
+#state.listening,#state.confirming{background:#c62828;color:#fff}
+#state.readback,#state.processing{background:#1565c0;color:#fff}
+#state.success{background:#0a7d22;color:#fff}
+#state.cancelled{background:#777;color:#fff}
+#state.error{background:#000;color:#ff0}
+#live{font-size:22px;min-height:1.5em;margin:8px 0;color:#333}
+#say{font-size:18px;min-height:1.4em;color:#1565c0}
+#would{font:16px monospace;background:#fffbe6;border:1px dashed #b38f00;padding:8px;min-height:1.4em;white-space:pre-wrap}
+button{font:700 18px system-ui,sans-serif;border-radius:10px;border:2px solid #111;background:#fff;color:#111;padding:10px 12px;min-height:52px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+#yesno{display:none}
+#yesno.on{display:flex}
+#yesBtn{background:#111;color:#fff;min-width:120px}
+#noBtn{min-width:120px}
+input[type=text],select{font-size:18px;padding:8px;border:2px solid #111;border-radius:8px}
+#log{font:13px monospace;white-space:pre-wrap;max-height:180px;overflow:auto;margin:0}
+.note{font-size:13px;color:#555}
 </style>
 </head>
 <body>
-<header><h1>Sorter Talk &middot; PRACTICE</h1><small>Practice only. Nothing is sent anywhere. Saved on this device only, after you say or tap Yes.</small></header>
+<header><h1>Pedal voice demo &mdash; PRACTICE</h1><small>Nothing is ever saved. Accepted entries only show "would save". Schools are placeholders (School A&ndash;K).</small></header>
 <main>
-  <ol id="rail" aria-label="Steps"></ol>
-  <div id="prompt" role="status" aria-live="assertive"></div>
-  <div id="heard" aria-live="polite"></div>
-  <button type="button" id="talk" class="big">&#127908; Talk</button>
-  <div id="textRow">
-    <input id="text" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"
-      placeholder="Or tap here and use the keyboard mic" aria-label="Type or dictate">
-    <button type="button" id="send">Send</button>
-  </div>
-  <div id="yesno"><button type="button" id="yes">YES</button><button type="button" id="no">NO</button></div>
-  <div id="stepButtons"></div>
-  <section>
-    <h2>Practice log (this device only)</h2>
-    <button type="button" id="undo" class="big">Undo last</button>
-    <ul id="log"></ul>
-  </section>
-  <section class="note">
-    <b>Say it all at once:</b> "School A, aluminum cans, 5 pounds" &rarr; hear the readback &rarr; "yes". Any order works; if something is missing, it asks only for that.<br>
-    <b>Or step by step:</b> "start" &rarr; "yes colors separated" &rarr; "School A" &rarr; "25 pounds number 2" &rarr; "yes".<br>
-    <b>Foot pedal:</b> hold the pedal down, talk, then let go (same as Talk). The pedal never answers for you: say or tap Yes to save.<br>
-    <b>Mic note:</b> the Talk button uses the browser's speech service (in Chrome this may send audio to Google). The keyboard mic uses your phone's own dictation. Both are optional; typing works too.
-    <div id="caps"></div>
-  </section>
+<div id="pedalBadge" role="status" aria-live="polite">Pedal: not detected yet</div>
+<section id="step0">
+  <h2>Step 0 &mdash; what this tablet supports</h2>
+  <pre id="caps">checking&hellip;</pre>
+  <div class="row"><button type="button" id="micProbe">Test microphone permission</button><button type="button" id="ttsProbe">Test speaker</button></div>
+  <div class="note">Speech recognition in Chrome uses the browser's own speech service, which may send audio to Google. This page sends nothing anywhere itself.</div>
+</section>
+<section>
+  <h2>Pedal</h2>
+  <div id="pedalInd">Pedal: not pressed yet</div>
+  <div id="lastKey">Last key seen: (none)</div>
+  <div class="row"><label><input type="checkbox" id="diagOnly" checked> Diagnostic mode: pedal check only (the mic stays off)</label></div>
+  <div class="note">Pedal key: F9 (also matched by keyCode/which 120). The letter P is an optional fallback, OFF unless turned on in the config. A pedal sending P and a keyboard P look the same.</div>
+  <h2>Key events (every keydown and keyup, newest first)</h2>
+  <pre id="keyLog">(press any key)</pre>
+</section>
+<section>
+  <h2>Voice</h2>
+  <div class="row"><label for="lock">School open on station:</label> <select id="lock"><option value="">(none &mdash; say the school)</option></select></div>
+  <div id="state" class="idle">IDLE</div>
+  <div id="live"></div>
+  <div id="say"></div>
+  <div id="yesno" class="row"><button type="button" id="yesBtn">YES</button><button type="button" id="noBtn">NO</button></div>
+  <div class="row"><button type="button" id="cancelBtn">Cancel (Esc)</button></div>
+  <h2>Would save</h2>
+  <div id="would">(nothing yet)</div>
+</section>
+<section>
+  <h2>Type instead (for testing without a mic)</h2>
+  <div class="row"><input type="text" id="typed" placeholder="School A, glass, 5 pounds" autocomplete="off"><button type="button" id="typedGo">Use text</button></div>
+  <div class="note">F9 works here too (it never types). If the optional P key is turned on, typing "p" here never starts the mic.</div>
+</section>
+<section>
+  <h2>Session log (this screen only)</h2>
+  <pre id="log"></pre>
+</section>
 </main>
 <script>
 /**
@@ -895,98 +913,558 @@ section h2{font-size:16px;margin:0 0 6px}
 
 </script>
 <script>
+/**
+ * Pedal voice config: the ONE place for pedal keys, timeouts, wording and weight rules.
+ * One pedal press = one voice session. ES5. node: module.exports; browser: window.PedalVoiceConfig.
+ */
+(function (root) {
+  'use strict';
+  var CONFIG = {
+    version: 'pedal-voice-config-2026-10-18b',
+    pedal: {
+      // Primary: F9 (pedal programmed to F9, Single mode = instant press + release; verified on Windows 2026-10-18).
+      // Matches e.key 'F9' OR e.code 'F9' OR keyCode/which 120 (old WebView fallback). Never types a character, so it
+      // works even while a text field has focus; its browser default is always blocked.
+      primary: { label: 'F9', keys: ['F9'], codes: ['F9'], keyCodes: [120], inTextFields: true },
+      // Optional secondary key, OFF by default: the letter P, only if the tablet does not deliver F9 and the pedal is
+      // reprogrammed to P. Ignored while a text field has focus, so typing a "p" never starts the mic.
+      // A pedal sending P and a keyboard P cannot be told apart.
+      secondary: { enabled: false, label: 'P', keys: ['p', 'P'], codes: ['KeyP'], keyCodes: [] },
+      debounceMs: 600
+    },
+    diag: { keyLogMax: 10 },      // diagnostic panel: last N raw keydown/keyup events
+    listen: {
+      lang: 'en-US',
+      continuous: false,          // single-shot: the recognizer ends by itself when the worker stops talking
+      interimResults: true,       // live text while talking
+      noSpeechMs: 7000,           // nothing heard at all -> stop, save nothing
+      silenceAfterSpeechMs: 1800, // speech heard, then quiet this long -> stop and use what was heard
+      maxListenMs: 15000,         // hard cap for one utterance
+      abortGraceMs: 1500          // stop() did not end it -> abort
+    },
+    tts: { lang: 'en-US', rate: 1.0, baseMs: 2500, perCharMs: 90, maxMs: 20000, failProceeds: true, resumeDelayMs: 350 },
+    confirm: { timeoutMs: 8000, maxReasks: 1 },
+    outcomeHoldMs: 3500,          // success / cancelled / error stay on screen this long, then idle
+    weight: { extraConfirm: true, extraConfirmAboveLb: 250 },
+    // Bins the station offers. Must be derived from the station's own list in any real build
+    // (Prod 78742db7 has no PP; QA d5fc767f has PP).
+    allowedMaterials: ['PLASTIC', 'HDPE', 'PP', 'ALUMINUM', 'GLASS', 'COMPOST', 'WASTE'],
+    text: {
+      idle: 'Press the pedal to talk.',
+      listening: 'Listening\u2026 say school, material and pounds.',
+      question: 'Is that correct?',
+      extra: 'That is over 250 pounds. Say yes again to save, or no to cancel.',
+      yesNoOnly: 'Please say yes or no.',
+      saved: 'Saved.',
+      cancelled: 'Cancelled. Nothing saved. Press the pedal to try again.',
+      silence: 'I did not hear anything. Nothing saved. Press the pedal to try again.',
+      confirmTimeout: 'No answer. Nothing saved. Press the pedal to try again.',
+      micDenied: 'The microphone is blocked here. Nothing saved.',
+      error: 'Voice error. Nothing saved.'
+    },
+    speakOutcomes: true
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = CONFIG;
+  else root.PedalVoiceConfig = CONFIG;
+})(this);
+
+</script>
+<script>
+/**
+ * Pedal voice core (pure; clock, recognizer, TTS and commit are injected).
+ *  - KeyFilter: which key events are the pedal (F9 primary; optional P, off by default), repeat, debounce, text-field rule.
+ *  - KeyDiag: pedal-detected counter + time and a rolling log of every keydown/keyup (what the tablet really delivers).
+ *  - PedalVoiceController: idle -> listening -> processing -> readback -> confirming -> success | cancelled | error.
+ *    Recognition is never running while the page speaks. Only a "yes" answer can call commit().
+ *  - makeInterpreter: one utterance ("School A, glass, 5 pounds") -> record + readback, via the practice parser.
+ * ES5. node: module.exports; browser: window.PedalVoice.
+ */
+(function (root) {
+  'use strict';
+  var ACTIVE = { listening: 1, processing: 1, readback: 1, confirming: 1 };
+  var MIC_DENIED = ['not-allowed', 'service-not-allowed'];
+  var NON_TEXT_INPUTS = ['button', 'checkbox', 'radio', 'submit', 'reset', 'image', 'file', 'range', 'color'];
+
+  /** True when typing a letter into el would type text (input, textarea, select, contenteditable). */
+  function isTypingTarget(el) {
+    if (!el) return false;
+    var t = String(el.tagName || '').toUpperCase();
+    if (t === 'TEXTAREA' || t === 'SELECT') return true;
+    if (t === 'INPUT') return NON_TEXT_INPUTS.indexOf(String(el.type || 'text').toLowerCase()) < 0;
+    return !!el.isContentEditable;
+  }
+  function inList(list, v) { return (list || []).indexOf(v) >= 0; }
+
+  // ---------------- KeyFilter ----------------
+  function KeyFilter(cfg, now) {
+    this.P = cfg.pedal; this.now = now || function () { return Date.now(); }; this.last = -1e15;
+  }
+  function hasCode(list, ev) { return inList(list, ev.keyCode) || inList(list, ev.which); }  // keyCode/which fallback for old WebView
+  /** 'primary' | 'secondary' | null. ev = { key, code, keyCode, which, repeat, ctrlKey, altKey, metaKey, typing }. */
+  KeyFilter.prototype.classify = function (ev) {
+    if (!ev || ev.ctrlKey || ev.altKey || ev.metaKey) return null;
+    var P = this.P, k = String(ev.key || ''), c = String(ev.code || '');
+    if (inList(P.primary.keys, k) || inList(P.primary.codes, c) || hasCode(P.primary.keyCodes, ev)) return 'primary';
+    var S = P.secondary;
+    if (!S || !S.enabled) return null;
+    if (inList(S.keys, k) || inList(S.codes, c) || hasCode(S.keyCodes, ev)) return 'secondary';
+    return null;
+  };
+  /** -> { accept, kind, reason, preventDefault } */
+  KeyFilter.prototype.keydown = function (ev) {
+    var kind = this.classify(ev);
+    if (!kind) return { accept: false, kind: null, reason: 'not_pedal', preventDefault: false };
+    if (ev.typing) {
+      if (kind === 'secondary') return { accept: false, kind: kind, reason: 'typing', preventDefault: false };  // the letter types normally
+      if (!this.P.primary.inTextFields) return { accept: false, kind: kind, reason: 'typing', preventDefault: true };
+    }
+    if (ev.repeat) return { accept: false, kind: kind, reason: 'repeat', preventDefault: true };
+    var t = this.now();
+    if (t - this.last < this.P.debounceMs) return { accept: false, kind: kind, reason: 'debounced', preventDefault: true };
+    this.last = t;
+    return { accept: true, kind: kind, reason: 'ok', preventDefault: true };
+  };
+  KeyFilter.prototype.keyup = function (ev) {
+    var kind = this.classify(ev);
+    return { kind: kind, preventDefault: kind === 'primary' };
+  };
+
+  // ---------------- KeyDiag ----------------
+  /** Diagnostics only (never decides anything): counts pedal keydowns as they ARRIVE (before debounce / lock / mic)
+   *  and keeps the last N raw key events. now() -> ms. */
+  function KeyDiag(cfg, now) {
+    this.max = (cfg.diag && cfg.diag.keyLogMax) || 10; this.now = now || function () { return Date.now(); };
+    this.lines = []; this.count = 0; this.lastAt = null; this.lastKind = null;
+  }
+  /** type 'keydown' | 'keyup'; kind from KeyFilter.classify. Returns the stored line. */
+  KeyDiag.prototype.record = function (type, ev, kind) {
+    var line = { type: type, key: String(ev.key == null ? '' : ev.key), code: String(ev.code == null ? '' : ev.code),
+      keyCode: ev.keyCode == null ? '' : ev.keyCode, which: ev.which == null ? '' : ev.which, repeat: !!ev.repeat, kind: kind || null, t: this.now() };
+    this.lines.unshift(line);
+    if (this.lines.length > this.max) this.lines.length = this.max;
+    if (type === 'keydown' && kind && !ev.repeat) { this.count++; this.lastAt = line.t; this.lastKind = kind; }
+    return line;
+  };
+  function pad(n, w) { n = String(n); while (n.length < w) n = '0' + n; return n; }
+  /** Local wall-clock time HH:MM:SS.mmm */
+  function clockText(ms) { var d = new Date(ms); return pad(d.getHours(), 2) + ':' + pad(d.getMinutes(), 2) + ':' + pad(d.getSeconds(), 2) + '.' + pad(d.getMilliseconds(), 3); }
+  KeyDiag.prototype.format = function (l) {
+    return clockText(l.t) + ' ' + (l.type === 'keydown' ? 'down' : 'up  ') + ' key=' + JSON.stringify(l.key) + ' code=' + JSON.stringify(l.code) +
+      ' keyCode=' + l.keyCode + ' which=' + l.which + (l.repeat ? ' REPEAT' : '') + (l.kind ? ' [pedal ' + l.kind + ']' : '');
+  };
+  /** Badge text, e.g. "Pedal (F9) detected x3 at 21:14:05.120" */
+  KeyDiag.prototype.badge = function (labels) {
+    if (!this.count) return 'Pedal: not detected yet';
+    return 'Pedal (' + (labels[this.lastKind] || '?') + ') detected x' + this.count + ' at ' + clockText(this.lastAt);
+  };
+
+  // ---------------- PedalVoiceController ----------------
+  /**
+   * deps: now(), setTimer(fn, ms) -> id, clearTimer(id), createRecognizer() -> recognizer | null,
+   *       tts: { speak(text, { onend, onerror }), cancel() }, interpret(text) -> { ok, record, readback, needsExtra, message },
+   *       commit(record, done({ ok, message })), onState(state, info), onLive(text)
+   */
+  function PedalVoiceController(cfg, deps) {
+    this.cfg = cfg; this.d = deps; this.state = 'idle'; this.gen = 0;
+    this.rec = null; this.timers = {}; this.pending = null; this.ttsTok = 0; this.commits = 0;
+  }
+  var C = PedalVoiceController.prototype;
+  C.isActive = function () { return !!ACTIVE[this.state]; };
+  C._set = function (state, info) { this.state = state; if (this.d.onState) this.d.onState(state, info || {}); };
+  C._timer = function (name, fn, ms) {
+    var self = this, g = this.gen;
+    this._clear(name);
+    this.timers[name] = this.d.setTimer(function () { self.timers[name] = null; if (g === self.gen) fn(); }, ms);
+  };
+  C._clear = function (name) { if (this.timers[name] != null) { this.d.clearTimer(this.timers[name]); this.timers[name] = null; } };
+  C._clearAll = function () { for (var k in this.timers) if (Object.prototype.hasOwnProperty.call(this.timers, k)) this._clear(k); };
+  /** Mic off: detach and abort the current recognizer (its late events are ignored). */
+  C._killRec = function () {
+    var r = this.rec; this.rec = null;
+    this._clear('noSpeech'); this._clear('silence'); this._clear('maxListen'); this._clear('grace'); this._clear('confirm');
+    if (r) { r.onresult = null; r.onerror = null; r.onend = null; try { r.abort(); } catch (e) {} }
+  };
+
+  /** Pedal (accepted by KeyFilter). One press = one session; ignored while a session is active. */
+  C.press = function () {
+    if (this.isActive()) return 'locked';
+    this._clearAll();
+    this.gen++; this.pending = null; this.asks = 0;
+    return this._listen('utterance');
+  };
+  /** Text instead of speech (typed test, or a kiosk without speech). Same path after recognition. */
+  C.submitText = function (text) {
+    if (this.isActive()) return 'locked';
+    this._clearAll(); this.gen++; this.pending = null; this.asks = 0;
+    this._process(String(text || ''));
+    return this.state;
+  };
+  /** Touch fallback for the confirm step: same as saying yes / no. */
+  C.answer = function (yn) {
+    if (this.state !== 'confirming' && this.state !== 'readback') return 'ignored';
+    this._killRec(); this._stopTts();
+    this._onAnswer(yn === 'yes' ? 'yes' : (yn === 'no' ? 'no' : null));
+    return this.state;
+  };
+  /** Escape / Cancel button / page hidden: stop everything, save nothing. */
+  C.cancel = function (why) {
+    if (!this.isActive()) return 'ignored';
+    if (this.saving) return 'saving';   // the save is already on its way; the existing handler decides
+    this._end('cancelled', why || 'cancelled');
+    return 'cancelled';
+  };
+
+  C._listen = function (purpose) {
+    var self = this, L = this.cfg.listen, r;
+    try { r = this.d.createRecognizer(); } catch (e) { r = null; }
+    if (!r) { this._end('error', 'no_speech_api'); return this.state; }
+    this.rec = r; this.purpose = purpose;
+    var finals = '', live = '', heard = false;
+    r.lang = L.lang; r.continuous = !!L.continuous; r.interimResults = !!L.interimResults; r.maxAlternatives = 1;
+    r.onresult = function (ev) {
+      if (self.rec !== r) return;
+      var all = (ev && ev.results) || [], f = [], i = [];
+      for (var n = 0; n < all.length; n++) {
+        var a = all[n] && all[n][0]; if (!a) continue;
+        (all[n].isFinal ? f : i).push(String(a.transcript || '').trim());
+      }
+      finals = f.join(' ').replace(/\s+/g, ' ').trim();
+      live = f.concat(i).join(' ').replace(/\s+/g, ' ').trim();
+      if (live) {
+        heard = true; self._clear('noSpeech');
+        if (self.d.onLive) self.d.onLive(live, purpose);
+        self._timer('silence', function () { self._stopRec(r); }, L.silenceAfterSpeechMs);
+      }
+    };
+    r.onerror = function (ev) {
+      if (self.rec !== r) return;
+      var code = String((ev && ev.error) || 'unknown');
+      if (code === 'no-speech') return self._end('cancelled', purpose === 'confirm' ? 'confirm_timeout' : 'silence');
+      if (code === 'aborted') return;   // our own abort, or the end event follows
+      if (MIC_DENIED.indexOf(code) >= 0) return self._end('error', 'mic_denied');
+      self._end('error', code);
+    };
+    r.onend = function () {
+      if (self.rec !== r) return;
+      self._killRec();
+      var text = finals || live;
+      if (!text) return self._end('cancelled', purpose === 'confirm' ? 'confirm_timeout' : 'silence');
+      if (purpose === 'confirm') self._onConfirmText(text); else self._process(text);
+    };
+    if (purpose === 'confirm') this._timer('confirm', function () { self._end('cancelled', 'confirm_timeout'); }, this.cfg.confirm.timeoutMs);
+    else this._timer('noSpeech', function () { if (!heard) self._end('cancelled', 'silence'); }, L.noSpeechMs);
+    this._timer('maxListen', function () { self._stopRec(r); }, L.maxListenMs);
+    try { r.start(); } catch (e2) { this._end('error', 'start_failed'); return this.state; }
+    if (this.rec === r) this._set(purpose === 'confirm' ? 'confirming' : 'listening', { purpose: purpose });
+    return this.state;
+  };
+  /** Ask the recognizer to finish (it then delivers what it heard via onend); abort if it does not. */
+  C._stopRec = function (r) {
+    var self = this;
+    if (this.rec !== r) return;
+    this._clear('silence'); this._clear('maxListen');
+    try { r.stop(); } catch (e) {}
+    this._timer('grace', function () { if (self.rec === r && r.onend) r.onend(); }, this.cfg.listen.abortGraceMs);
+  };
+  C._process = function (text) {
+    this._killRec();
+    this._set('processing', { heard: text });
+    var res;
+    try { res = this.d.interpret(text); } catch (e) { res = { ok: false, message: 'Not understood.' }; }
+    if (!res || !res.ok) return this._end('cancelled', 'not_understood', { heard: text, message: (res && res.message) || '' });
+    this.pending = { record: res.record, needsExtra: !!res.needsExtra, extraOk: false, heard: text };
+    this._readback(res.readback + ' ' + this.cfg.text.question, { record: res.record, heard: text });
+  };
+  /** Speak with the mic OFF; when speech ends (or the watchdog fires), listen for yes/no. */
+  C._readback = function (say, info) {
+    var self = this, T = this.cfg.tts, tok = ++this.ttsTok, done = false;
+    this._killRec();
+    info = info || {}; info.say = say;
+    this._set('readback', info);
+    function after() {
+      if (done || tok !== self.ttsTok || self.state !== 'readback') return;
+      done = true; self._clear('tts');
+      self._timer('resume', function () { if (self.state === 'readback') self._listen('confirm'); }, T.resumeDelayMs);
+    }
+    this._timer('tts', after, Math.min(T.maxMs, T.baseMs + T.perCharMs * say.length));
+    try {
+      this.d.tts.speak(say, { onend: after, onerror: function () { if (T.failProceeds) after(); } });
+    } catch (e) { if (T.failProceeds) after(); }
+  };
+  C._stopTts = function () { this.ttsTok++; this._clear('tts'); this._clear('resume'); try { this.d.tts.cancel(); } catch (e) {} };
+  C._onConfirmText = function (text) {
+    var yn = parseYesNo(text);
+    this._onAnswer(yn, text);
+  };
+  C._onAnswer = function (yn, text) {
+    var p = this.pending;
+    if (!p) return this._end('cancelled', 'nothing_pending');
+    if (yn === 'no') return this._end('cancelled', 'no');
+    if (yn !== 'yes') {
+      this.asks = (this.asks || 0) + 1;
+      if (this.asks > this.cfg.confirm.maxReasks) return this._end('cancelled', 'unclear', { heard: text || '' });
+      return this._readback(this.cfg.text.yesNoOnly, { record: p.record, heard: text || '' });
+    }
+    if (this.cfg.weight.extraConfirm && p.needsExtra && !p.extraOk) {
+      p.extraOk = true;
+      return this._readback(this.cfg.text.extra, { record: p.record, extra: true });
+    }
+    this._commit(p);
+  };
+  C._commit = function (p) {
+    var self = this, g = this.gen;
+    this.pending = null;
+    this._killRec(); this._stopTts();
+    this.saving = true;
+    this._set('processing', { saving: true, record: p.record });
+    this.commits++;
+    this.d.commit(p.record, function (res) {
+      if (g !== self.gen || self.state !== 'processing') return;
+      if (res && res.ok) self._end('success', 'saved', { record: p.record, message: res.message || '' });
+      else self._end('error', 'commit_failed', { record: p.record, message: (res && res.message) || '' });
+    });
+  };
+  /** Terminal: mic off, page voice off, pending dropped; optional short spoken outcome; idle later. */
+  C._end = function (state, reason, info) {
+    var self = this, T = this.cfg.text;
+    this._killRec(); this._stopTts(); this._clearAll();
+    this.saving = false; this.pending = null;
+    info = info || {}; info.reason = reason;
+    var say = state === 'success' ? T.saved
+      : reason === 'silence' ? T.silence
+      : reason === 'confirm_timeout' ? T.confirmTimeout
+      : reason === 'mic_denied' ? T.micDenied
+      : state === 'error' ? T.error
+      : T.cancelled;
+    info.say = say;
+    this.gen++;
+    this._set(state, info);
+    if (this.cfg.speakOutcomes && reason !== 'mic_denied' && reason !== 'no_speech_api') {
+      try { this.d.tts.speak(say, { onend: function () {}, onerror: function () {} }); } catch (e) {}
+    }
+    this._timer('outcome', function () { self._set('idle', {}); }, this.cfg.outcomeHoldMs);
+  };
+
+  var NO_WORDS = ['no', 'nope', 'cancel', 'wrong', 'stop', 'nah', 'negative', 'incorrect'];
+  var YES_WORDS = ['yes', 'yeah', 'yep', 'yup', 'correct', 'right', 'affirmative', 'confirm'];
+  /** Strict yes/no for the confirm step. Any no-word wins; "not correct" is no. */
+  function parseYesNo(text) {
+    var s = String(text || '').toLowerCase().replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!s) return null;
+    if (/\b(not|dont|don t|isnt|isn t) (right|correct)\b|\bno way\b/.test(s)) return 'no';
+    var w = s.split(' ');
+    for (var i = 0; i < w.length; i++) if (NO_WORDS.indexOf(w[i]) >= 0) return 'no';
+    for (i = 0; i < w.length; i++) if (YES_WORDS.indexOf(w[i]) >= 0) return 'yes';
+    return null;
+  }
+
+  // ---------------- interpreter (uses the practice parser) ----------------
+  function fmt(n) { return String(Math.round(n * 10) / 10); }
+  var UNIT_WORD = { lb: 'pounds', kg: 'kilograms', oz: 'ounces' };
+  function weightWords(r) {
+    if (r.converted) return fmt(r.value) + ' ' + UNIT_WORD[r.unit] + ', about ' + fmt(r.weightLb) + ' pounds';
+    return fmt(r.weightLb) + ' pounds' + (r.rounded ? ' (rounded to one decimal)' : '');
+  }
+  /**
+   * ST = practice parser API, scfg = practice config (schools/materials), vcfg = this config,
+   * getContext() -> { lockedSource: {code,name} | null }  (the school already open on the station).
+   */
+  function makeInterpreter(ST, scfg, vcfg, getContext) {
+    var EXAMPLE = 'Say school, material and pounds, like "School A, glass, 5 pounds".';
+    return function (text) {
+      var ctx = (getContext && getContext()) || {}, lock = ctx.lockedSource || null;
+      var r = ST.parse(text, scfg);
+      if (r.intent && r.intent !== 'SLOTS') return { ok: false, message: 'Only weights can be said here. ' + EXAMPLE };
+      if (r.errors.length || r.ambiguous) return { ok: false, message: ST.reask(r, scfg) };
+      if (r.source && lock && r.source.code !== lock.code) return { ok: false, message: lock.name + ' is open on this station. Nothing saved.' };
+      var src = r.source || lock;
+      var miss = [];
+      if (!src) miss.push('school'); if (!r.material) miss.push('material'); if (r.weightLb == null) miss.push('pounds');
+      if (miss.length) return { ok: false, message: 'Missing ' + miss.join(', ') + '. ' + EXAMPLE };
+      if ((vcfg.allowedMaterials || []).indexOf(r.material.code) < 0) return { ok: false, message: r.material.label + ' is not a bin on this station.' };
+      var record = { sourceCode: src.code, sourceName: src.name, material: r.material.code, materialLabel: r.material.label,
+        lbs: r.weightLb, heard: String(text), notAccepted: !!r.notAccepted, converted: !!r.converted, rounded: !!r.rounded, unit: r.unit, value: r.value };
+      var big = r.weightLb > vcfg.weight.extraConfirmAboveLb;
+      var readback = (r.notAccepted ? 'Not accepted, log as waste. ' : '') + src.name + ', ' + r.material.say + ', ' + weightWords(r) + '.' +
+        (big ? ' That is over ' + vcfg.weight.extraConfirmAboveLb + ' pounds.' : '');
+      return { ok: true, record: record, readback: readback, needsExtra: big };
+    };
+  }
+
+  var API = { isTypingTarget: isTypingTarget, KeyFilter: KeyFilter, KeyDiag: KeyDiag, clockText: clockText, PedalVoiceController: PedalVoiceController,
+    parseYesNo: parseYesNo, makeInterpreter: makeInterpreter, ACTIVE: ACTIVE };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  else root.PedalVoice = API;
+})(this);
+
+</script>
+<script>
 (function () {
   'use strict';
-  var C = window.SorterTalkConfig, S = window.SorterTalk;
-  var store = null;
-  try { window.localStorage.setItem('sorterTalkProbe', '1'); store = window.localStorage; } catch (e) { store = S.memoryBackend(); }
-  var session = new S.Session(C, store);
+  var ST = window.SorterTalk, SC = window.SorterTalkConfig, VC = window.PedalVoiceConfig, PV = window.PedalVoice;
   function $(id) { return document.getElementById(id); }
-  function el(tag, text, cls) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
-  var synth = window.speechSynthesis || null;
-  $('caps').textContent = 'Speech API: ' + (SR ? 'yes' : 'no') + ' \u00b7 secure context: ' + String(window.isSecureContext) + ' \u00b7 voice readback: ' + (synth ? 'yes' : 'no');
+  function txt(id, s) { var e = $(id); if (e) e.textContent = s; }
+  function logLine(s) { var e = $('log'), d = new Date(); e.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2) + '  ' + s + '\n' + e.textContent; }
 
-  function speak(text, then) {
-    if (!synth || !text) { if (then) then(); return; }
-    try {
-      synth.cancel();
-      var u = new SpeechSynthesisUtterance(text); u.lang = 'en-US';
-      var fired = false; function done() { if (fired) return; fired = true; if (then) then(); }
-      u.onend = done; u.onerror = done;
-      setTimeout(done, Math.min(12000, 1500 + text.length * 80)); // some phones never fire onend
-      synth.speak(u);
-    } catch (e) { if (then) then(); }
+  // ---- Step 0: capabilities ----
+  var inFrame = false; try { inFrame = window.self !== window.top; } catch (e) { inFrame = true; }
+  var hasSR = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
+  var caps = {
+    userAgent: navigator.userAgent,
+    webkitSpeechRecognition: 'webkitSpeechRecognition' in window,
+    SpeechRecognition: 'SpeechRecognition' in window,
+    speechSynthesis: 'speechSynthesis' in window,
+    secureContext: !!window.isSecureContext,
+    inIframe: inFrame,
+    mediaDevices: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+    micPermission: 'checking',
+    micProbe: 'not run (tap the button)',
+    voices: 'checking'
+  };
+  function paintCaps() {
+    var lines = [];
+    for (var k in caps) if (Object.prototype.hasOwnProperty.call(caps, k)) lines.push(k + ': ' + caps[k]);
+    lines.push('');
+    lines.push('CAPABILITY: ' + (hasSR ? 'speech-recognition=yes' : 'speech-recognition=NO') + ' | ' +
+      (caps.speechSynthesis ? 'tts=yes' : 'tts=NO') + ' | ' + (caps.secureContext ? 'secure=yes' : 'secure=NO') + ' | ' +
+      (caps.inIframe ? 'iframe=YES (mic may be blocked)' : 'iframe=no') + ' | mic=' + caps.micPermission);
+    txt('caps', lines.join('\n'));
   }
+  function voicesNow() { try { return window.speechSynthesis ? window.speechSynthesis.getVoices().length : 'n/a'; } catch (e) { return 'error'; } }
+  caps.voices = voicesNow();
+  try { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = function () { caps.voices = voicesNow(); paintCaps(); }; } catch (e) {}
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'microphone' }).then(function (p) {
+        caps.micPermission = p.state; paintCaps();
+        p.onchange = function () { caps.micPermission = p.state; paintCaps(); };
+      }, function (e) { caps.micPermission = 'query failed (' + (e && e.name) + ')'; paintCaps(); });
+    } else caps.micPermission = 'permissions API missing';
+  } catch (e) { caps.micPermission = 'query threw'; }
+  paintCaps();
+  $('micProbe').onclick = function () {
+    if (!caps.mediaDevices) { caps.micProbe = 'getUserMedia missing'; paintCaps(); return; }
+    caps.micProbe = 'asking\u2026'; paintCaps();
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
+      s.getTracks().forEach(function (t) { t.stop(); });   // probe only: released at once, nothing recorded
+      caps.micProbe = 'ALLOWED (released)'; paintCaps(); logLine('mic probe: allowed');
+    }, function (e) {
+      caps.micProbe = 'BLOCKED: ' + (e && e.name) + (e && e.message ? ' - ' + e.message : ''); paintCaps(); logLine('mic probe: ' + caps.micProbe);
+    });
+  };
+  $('ttsProbe').onclick = function () { tts.speak('Speaker test.', { onend: function () { logLine('speaker test: end'); }, onerror: function (e) { logLine('speaker test: error ' + e); } }); };
 
-  var listener = new S.ListenController(SR, C, {
-    onText: function (t, conf) { $('heard').textContent = 'Heard: "' + t + '"'; render(session.hear(t, conf)); },
-    onState: function (state, why) {
-      var b = $('talk');
-      if (state === 'listening') { b.classList.add('listening'); b.textContent = why === 'hold' ? 'Listening\u2026 let go of the pedal to stop' : 'Listening\u2026 tap to stop'; }
-      else if (state === 'stopping') { b.textContent = 'Stopping\u2026'; }
-      else { b.classList.remove('listening'); b.innerHTML = '&#127908; Talk'; }
+  // ---- schools (placeholders) ----
+  var lockSel = $('lock');
+  SC.sources.forEach(function (s) { var o = document.createElement('option'); o.value = s.code; o.textContent = s.name; lockSel.appendChild(o); });
+  function lockedSource() { var c = lockSel.value; return c ? SC.sources.filter(function (s) { return s.code === c; })[0] : null; }
+
+  // ---- deps (replaceable for automated checks) ----
+  var hold = null;   // keep a reference to the utterance (some Chrome builds drop onend otherwise)
+  var tts = {
+    speak: function (text, cb) {
+      var ss = window.speechSynthesis;
+      if (!ss || !window.SpeechSynthesisUtterance) { setTimeout(function () { cb.onerror('no_tts'); }, 0); return; }
+      try {
+        ss.cancel();
+        var u = new window.SpeechSynthesisUtterance(text); hold = u;
+        u.lang = VC.tts.lang; u.rate = VC.tts.rate;
+        u.onend = function () { cb.onend(); }; u.onerror = function (e) { cb.onerror(e && e.error); };
+        ss.speak(u);
+      } catch (e) { cb.onerror('speak_threw'); }
     },
-    onNothing: function () { $('heard').textContent = 'Nothing heard. Hold the pedal (or tap Talk) and speak.'; },
-    onError: function (code) { $('heard').textContent = 'Speech: ' + code + '. Tap Talk again or type.'; },
-    onFallback: function (why) { $('talk').style.display = 'none'; $('heard').textContent = 'Mic not available here (' + why + '). Use the keyboard mic in the box.'; }
-  });
-  if (!SR) $('talk').style.display = 'none';
-  $('talk').onclick = function () { if (synth) try { synth.cancel(); } catch (e) {} listener.tap(); };
-
-  // foot pedal (USB, acts as a keyboard): push-to-talk. It only starts/stops listening; it never answers Yes/No.
-  var pedal = new S.PedalController(listener, C);
-  function typing() { var a = document.activeElement; return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable === true); }
-  function pedalEv(e) { return { key: e.key, repeat: e.repeat, typing: typing(), ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey }; }
-  function pedalNote(a) { if (a === 'too_short') $('heard').textContent = 'Pedal: hold it down while you talk, then let go.'; }
-  document.addEventListener('keydown', function (e) {
-    var r = pedal.keydown(pedalEv(e)); if (r.preventDefault) e.preventDefault();
-    if (r.action === 'start' && synth) try { synth.cancel(); } catch (x) {}
-    pedalNote(r.action);
-  });
-  document.addEventListener('keyup', function (e) { var r = pedal.keyup(pedalEv(e)); if (r.preventDefault) e.preventDefault(); pedalNote(r.action); });
-  window.addEventListener('blur', function () { pedal.blur(); });
-  document.addEventListener('visibilitychange', function () { if (document.hidden) pedal.blur(); });
-
-  function sendText() { var t = $('text').value.trim(); if (!t) return; $('heard').textContent = 'Typed: "' + t + '"'; $('text').value = ''; render(session.hear(t)); }
-  $('send').onclick = sendText;
-  $('text').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); sendText(); } });
-  $('yes').onclick = function () { render(session.tapYes()); };
-  $('no').onclick = function () { render(session.tapNo()); };
-  $('undo').onclick = function () { render(session.tapUndo()); };
-
-  function btn(label, sub, fn) { var b = el('button', label); b.type = 'button'; if (sub) b.appendChild(el('small', sub)); b.onclick = fn; return b; }
-  function render(out) {
-    var step = session.st.step;
-    var rail = $('rail'); rail.innerHTML = '';
-    C.flow.steps.forEach(function (s) { var li = el('li', s); if (s === step) li.className = 'on'; rail.appendChild(li); });
-    var say = (out && out.say) || session.prompt();
-    var src = session.source();
-    $('prompt').textContent = say + (src && step !== 'confirm' ? '  [School: ' + src.name + ']' : '');
-    $('yesno').style.display = session.pending ? 'grid' : 'none';
-    var box = $('stepButtons'); box.innerHTML = '';
-    var g = el('div', null, 'grid');
-    if (step === 'who') g.appendChild(btn('START', 'practice mode', function () { render(session.tapStart()); }));
-    if (step === 'bags') g.appendChild(btn('YES \u2014 COLORS SEPARATED', null, function () { render(session.tapBagsYes()); }));
-    if (step === 'school') S.sourcesAZ(C).forEach(function (s) { g.appendChild(btn(s.name, null, function () { render(session.tapSchool(s.code)); })); });
-    if (step === 'material') C.materials.forEach(function (m) { g.appendChild(btn(m.label, m.sub, function () { render(session.tapMaterial(m.code)); })); });
-    if (step === 'next') {
-      [['WEIGH ANOTHER BIN', 'weigh another'], ['CHANGE MATERIAL', 'change material'], ['GO BACK TO SORTING', 'back to sorting'], ['FINISHED WITH THIS SCHOOL', 'finished with this school']]
-        .forEach(function (x) { g.appendChild(btn(x[0], null, function () { render(session.hear(x[1])); })); });
+    cancel: function () { try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {} }
+  };
+  var D = {
+    SR: function () { return window.SpeechRecognition || window.webkitSpeechRecognition || null; },
+    tts: tts,
+    commit: function (record, done) {
+      // DEMO: no write of any kind. Show what the real Record Weight would receive.
+      var line = 'would save: ' + record.sourceName + ', ' + record.material + ', ' + record.lbs + ' lb  (heard: "' + record.heard + '")';
+      txt('would', line); logLine(line);
+      setTimeout(function () { done({ ok: true, message: 'demo: not saved' }); }, 0);
     }
-    box.appendChild(g);
-    var log = $('log'); log.innerHTML = '';
-    session.store.all().slice().reverse().forEach(function (r) {
-      var t = new Date(r.Timestamp).toLocaleTimeString();
-      log.appendChild(el('li', r._kind === 'bin_empty' ? t + ' \u00b7 ' + r.Material + ' bin empty' :
-        t + ' \u00b7 ' + r.Lbs + ' lb \u00b7 ' + r.Material + ' \u00b7 ' + r['Source Code'] + (r._converted ? ' (converted from ' + r._value + ' ' + r._unit + ')' : '')));
-    });
-    if (out && out.say) speak(out.say, function () {
-      // hands-free: after a readback (yes/no) or a missing-field question, listen once more (tap still works; iOS may refuse a mic start without a tap)
-      if ((session.pending || (out.missing && out.missing.length)) && SR && !listener.disabled && !listener.listening) listener.start(session.pending ? 'yesno' : 'missing');
-    });
+  };
+  VC.text.saved = 'Accepted. Demo only, nothing saved.';
+  var LABEL = { idle: 'IDLE', listening: 'LISTENING\u2026', processing: 'PROCESSING', readback: 'READBACK (mic off)', confirming: 'LISTENING FOR YES / NO', success: 'ACCEPTED (demo)', cancelled: 'CANCELLED', error: 'ERROR' };
+  var ctl = new PV.PedalVoiceController(VC, {
+    now: function () { return Date.now(); },
+    setTimer: function (f, ms) { return setTimeout(f, ms); },
+    clearTimer: function (id) { clearTimeout(id); },
+    createRecognizer: function () { var S = D.SR(); return S ? new S() : null; },
+    tts: { speak: function (t, cb) { D.tts.speak(t, cb); }, cancel: function () { D.tts.cancel(); } },
+    interpret: PV.makeInterpreter(ST, SC, VC, function () { return { lockedSource: lockedSource() }; }),
+    commit: function (r, done) { D.commit(r, done); },
+    onLive: function (t) { txt('live', t); },
+    onState: function (s, info) {
+      var el = $('state'); el.className = s; el.textContent = LABEL[s] || s;
+      if (s === 'listening') { txt('live', ''); txt('say', VC.text.listening); }
+      else if (s === 'idle') { txt('say', VC.text.idle); }
+      else if (info.say) txt('say', info.say);
+      else if (info.message) txt('say', info.message);
+      if (s === 'cancelled' || s === 'error') txt('say', (info.message ? info.message + ' ' : '') + (info.say || ''));
+      $('yesno').className = (s === 'confirming' || s === 'readback') ? 'row on' : 'row';
+      lockSel.disabled = ctl && ctl.isActive();
+      if (s !== 'idle') logLine('state=' + s + (info.reason ? ' reason=' + info.reason : '') + (info.heard ? ' heard="' + info.heard + '"' : ''));
+    }
+  });
+  txt('say', VC.text.idle);
+
+  // ---- pedal ----
+  var filter = new PV.KeyFilter(VC, function () { return Date.now(); });
+  var diag = new PV.KeyDiag(VC, function () { return Date.now(); });
+  var LABELS = { primary: VC.pedal.primary.label, secondary: VC.pedal.secondary.label };
+  var indTimer = null, badgeTimer = null;
+  function keyInfo(e) {
+    return { key: e.key, code: e.code, keyCode: e.keyCode, which: e.which, repeat: !!e.repeat, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey,
+      typing: PV.isTypingTarget(document.activeElement) };
   }
-  render({ say: session.prompt() });
+  // Diagnostics FIRST (badge + key log), before anything that can fail (mic, recognizer, TTS).
+  function showDiag(type, ev, kind) {
+    try {
+      var before = diag.count;
+      diag.record(type, ev, kind);
+      txt('keyLog', diag.lines.map(function (l) { return diag.format(l); }).join('\n'));
+      if (diag.count !== before) {
+        var b = $('pedalBadge'); b.textContent = diag.badge(LABELS); b.className = 'hit flash';
+        clearTimeout(badgeTimer); badgeTimer = setTimeout(function () { b.className = 'hit'; }, 400);
+      }
+    } catch (x) {}
+  }
+  function onKeyDown(e) {
+    var ev = keyInfo(e), kind = filter.classify(ev);
+    showDiag('keydown', ev, kind);
+    var r = filter.keydown(ev), verdict = r.kind ? (r.accept ? 'accepted' : 'ignored: ' + r.reason) : 'not a pedal key';
+    if (r.preventDefault) e.preventDefault();
+    if (r.accept) {
+      if ($('diagOnly').checked) verdict = 'accepted (diagnostic mode: mic not started)';
+      else { try { var a = ctl.press(); if (a === 'locked') verdict = 'ignored: session active'; } catch (x) { verdict = 'accepted, voice failed: ' + (x && x.message); } }
+    }
+    txt('lastKey', 'Last key seen: key=' + JSON.stringify(e.key) + ' code=' + JSON.stringify(e.code) + ' keyCode=' + e.keyCode + ' which=' + e.which +
+      ' repeat=' + !!e.repeat + ' textFocus=' + ev.typing + ' -> ' + verdict);
+    if (r.kind) {
+      var ind = $('pedalInd');
+      ind.textContent = 'Pedal pressed (' + LABELS[r.kind] + ') \u2014 ' + verdict;
+      ind.className = 'on';
+      clearTimeout(indTimer); indTimer = setTimeout(function () { ind.className = ''; }, 1500);
+      logLine('pedal ' + LABELS[r.kind] + ': ' + verdict);
+    }
+    if (e.key === 'Escape' && ctl.isActive()) ctl.cancel('escape');
+  }
+  function onKeyUp(e) {
+    var ev = keyInfo(e);
+    showDiag('keyup', ev, filter.classify(ev));
+    var r = filter.keyup(ev); if (r.preventDefault) e.preventDefault();
+  }
+  window.addEventListener('keydown', onKeyDown, true);
+  window.addEventListener('keyup', onKeyUp, true);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) ctl.cancel('page_hidden'); });
+  $('yesBtn').onclick = function () { ctl.answer('yes'); };
+  $('noBtn').onclick = function () { ctl.answer('no'); };
+  $('cancelBtn').onclick = function () { ctl.cancel('cancel_button'); };
+  $('typedGo').onclick = function () { var v = $('typed').value; if (v.trim()) ctl.submitText(v); };
+
+  window.PedalVoiceDemo = { controller: ctl, filter: filter, diag: diag, deps: D, caps: caps, version: VC.version };
 })();
 </script>
 </body>
